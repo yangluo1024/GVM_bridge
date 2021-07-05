@@ -43,7 +43,7 @@ The functions of these components are:
 
 -------
 #### **License**
-The project are currently licensed under [BSL](https://github.com/CycanTech/GVM-Bridge/blob/main/License-BSL)<br>
+The project are currently licensed under [BSL](https://github.com/CycanTech/GVM-Bridge/blob/main/License)<br>
 Test cases(`tests.*`) are licensed under [Apache 2.0](https://github.com/CycanTech/GVM-Bridge/blob/main/License-APACHE2)
 
 #### **Other**
