@@ -1,0 +1,8 @@
+[workspace]
+members = [
+	"frame/vm-bridge",
+	"frame/evm-precompile/callwasmc",
+]
+
+[profile.release]
+panic = 'unwind'
