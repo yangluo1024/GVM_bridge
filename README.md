@@ -49,8 +49,10 @@ early development will only provide the GVM Bridge pallet, it include functions 
 2. Provide access to contract invocation interface.
 3. Implement the inter-conversion of VM GABI parameters and WASM ABI parameters. 
 4. Implement the inter-conversion of VM GABI parameters and EVM ABI parameters.
-5. Implement the ChainExtension function for contract inter-call.
-6. Implement the pre-compiled contract for contract inter-calls.
+
+#### **EVM VM-Call Pre-compiled Module**
+1. Implement the pre-compiled VM call function for contract inter-calls.
+2. Provide EvmChainExtention trait.
 
 -------
 #### **License**
