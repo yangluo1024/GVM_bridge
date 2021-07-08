@@ -41,6 +41,17 @@ The functions of these components are:
 1. Implement EVM ABI to VM GABI conversion.
 2. Implement VM GABI to EVM ABI conversion.
 
+### Early development stage(version 0.1.0)
+early development will only provide the GVM Bridge pallet, it include functions of GVM Bridge Framework, WASM-Proxy pallet and EVM-Proxy pallet. 
+ 
+#### **GVM Bridge pallet**
+1. Build inter-call framework for different VM contract to provide the interface for virtual machine.
+2. Provide access to contract invocation interface.
+3. Implement the inter-conversion of VM GABI parameters and WASM ABI parameters. 
+4. Implement the inter-conversion of VM GABI parameters and EVM ABI parameters.
+5. Implement the ChainExtension function for contract inter-call.
+6. Implement the pre-compiled contract for contract inter-calls.
+
 -------
 #### **License**
 The project are currently licensed under [BSL](https://github.com/CycanTech/GVM-Bridge/blob/main/License)<br>
