@@ -40,7 +40,7 @@ pallet-balances = { version = "3.0.0", default-features = false, git = "https://
 pallet-timestamp = { version = "3.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
 pallet-randomness-collective-flip = { version = "3.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
 pallet-evm-precompile-simple = {version = "2.0.0-dev", default-features = false, git = "https://github.com/paritytech/frontier.git" }
-pallet-evm-precompile-callwasmc = { version = "0.1.0", path = "../evm-precompile/callwasmc" }
+pallet-evm-precompile-call-vm = { version = "0.1.0", path = "../evm-precompile/call-vm" }
 ink_env = { git = "https://github.com/paritytech/ink",  version = "3.0.0-rc3" }
 
 [features]

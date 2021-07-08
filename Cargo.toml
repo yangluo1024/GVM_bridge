@@ -1,7 +1,7 @@
 [workspace]
 members = [
 	"frame/vm-bridge",
-	"frame/evm-precompile/callwasmc",
+	"frame/evm-precompile/call-vm",
 ]
 
 [profile.release]
