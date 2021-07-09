@@ -56,8 +56,8 @@ early development will only provide the GVM Bridge pallet, it include functions 
 
 -------
 #### **License**
-The project are currently licensed under [BSL](https://github.com/CycanTech/GVM-Bridge/blob/main/LICENSE)<br>
-Test cases(`tests.*`) are licensed under [Apache 2.0](https://github.com/CycanTech/GVM-Bridge/blob/main/LICENSE-APACHE2)
+The project are currently licensed under [BSL](https://github.com/CycanTech/GVM-Bridge/blob/main/License)<br>
+Test cases(`tests.*`) and files under /external are licensed under [Apache 2.0](https://github.com/CycanTech/GVM-Bridge/blob/main/License-APACHE2)
 
 #### **Other**
 In order to facilitate developers to develop contract inter-call function, we will provide sample codes for WASM contract and EVM contract inter-calling, such as inter-calling ERC20 contract etc.
