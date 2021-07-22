@@ -44,15 +44,15 @@ use ink_env::call::{Selector, ExecutionInput};
 use sha3::{Keccak256, Digest};
 
 use pallet_evm::{
-        FeeCalculator, HashedAddressMapping, EnsureAddressTruncated, Runner, 
+        FeeCalculator, AddressMapping, EnsureAddressTruncated, Runner, 
 		ExitReason, CallInfo, CreateInfo, SubstrateBlockHashMapping, 
 };
 
 use frame_system::pallet_prelude::*;
+use std::error::Error;
 
 // use crate as gvm_bridge pallet
 use crate as pallet_vm_bridge;
-
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -88,6 +88,18 @@ impl pallet_vm_bridge::Config for Test {
 	type Enable2WasmC = Enable2WasmC;
 }
 
+/// Identity address mapping.
+pub struct CompactAddressMapping;
+
+impl AddressMapping<AccountId32> for CompactAddressMapping {
+	fn into_account_id(address: H160) ->  AccountId32 {	
+		let mut data = [0u8; 32];
+		data[0..20].copy_from_slice(&address[..]);
+		AccountId32::from(data)
+	}
+}
+
+
 /// Fixed gas price of `0`.
 pub struct FixedGasPrice;
 impl FeeCalculator for FixedGasPrice {
@@ -116,7 +128,7 @@ impl pallet_evm::Config for Test {
         type GasWeightMapping = ();
         type CallOrigin = EnsureAddressTruncated;
         type WithdrawOrigin = EnsureAddressTruncated;
-        type AddressMapping = HashedAddressMapping<BlakeTwo256>;
+        type AddressMapping = CompactAddressMapping;
         type Currency = Balances;
         type Event = Event;
         type Runner = pallet_evm::runner::stack::Runner<Self>;
@@ -144,7 +156,7 @@ impl pallet_contracts::chain_extension::ChainExtension<Test> for Test{
 		<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>
 	{
 		match func_id {
-			0 => GvmBridge::call_evm4wasm::<E>(env),
+			5 => GvmBridge::call_evm4wasm::<E>(env),
 			_ => Err(DispatchError::from("Passed unknown func_id to chain extension")),			
 		}
 	}
@@ -212,7 +224,7 @@ parameter_types! {
 	pub const MaxValueSize: u32 = 16_384;
 	pub const DeletionQueueDepth: u32 = 1024;
 	pub const DeletionWeightLimit: Weight = 500_000_000_000;
-	pub const MaxCodeSize: u32 = 10 * 1024;
+	pub const MaxCodeSize: u32 = 100 * 1024;
 }
 
 parameter_types! {
@@ -248,12 +260,12 @@ impl pallet_contracts::Config for Test {
 	type MaxCodeSize = MaxCodeSize;
 }
 
-pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
-pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
+//pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
+//pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
 //pub const CHARLIE: AccountId32 = AccountId32::new([3u8; 32]);
 //pub const DJANGO: AccountId32 = AccountId32::new([4u8; 32]);
 
-const GAS_LIMIT: Weight = 10_000_000_000;
+const GAS_LIMIT: Weight = 1000_000_000_000;
 
 pub struct ExtBuilder {
 	existential_deposit: u64,
@@ -319,20 +331,29 @@ fn read_a_file(filename: &str) -> std::io::Result<Vec<u8>> {
     let mut file = File::open(filename)?;
 
     let mut data = Vec::new();
-    file.read_to_end(&mut data)?;
+    let len = file.read_to_end(&mut data)?;
 
     return Ok(data);
 }
 
 fn contract_module<T>(
 	contract_name: &str,
-) -> std::io::Result<(Vec<u8>, <T::Hashing as Hash>::Output)>
+	wasmtype: bool,
+) -> Result<(Vec<u8>, <T::Hashing as Hash>::Output), Box<dyn Error>>
 where
 	T: frame_system::Config,
 {
-	let contract_path = ["test-contract/", contract_name].concat();
+	let contract_path = ["fixtures/", contract_name].concat();
+	let contract_binary: Vec<u8>;
 	
-	let contract_binary = read_a_file(&contract_path)?;
+	if wasmtype {
+		contract_binary = read_a_file(&contract_path)?;
+		
+	} else {
+		let bytecode = read_a_file(&contract_path)?;
+		contract_binary = hex::decode(bytecode)?;
+	}
+	
 	let code_hash = T::Hashing::hash(&contract_binary);
 	Ok((contract_binary, code_hash))
 }
@@ -340,43 +361,51 @@ where
 // Perform test for wasm contract  calling  EVM contract
 #[test]
 fn test_wasm_call_evm(){
-	
+	let mut data = [0u8; 32];
+	data[0..20].copy_from_slice(&[1u8; 20]);
+	let ALICE: AccountId32 = AccountId32::new(data.clone());
+	data[0..20].copy_from_slice(&[2u8; 20]);
+	let BOB: AccountId32 = AccountId32::new(data);
 	// 1.  Get wasm and evm contract bin
-	let (wasm, wasm_code_hash) = contract_module::<Test>("wasm_contract_test").unwrap();
-	let (evm, _evm_code_hash) = contract_module::<Test>("evm_contract_test").unwrap();
+	let (wasm, wasm_code_hash) = contract_module::<Test>("erc20.wasm", true).unwrap();
+	let (evm, _evm_code_hash) = contract_module::<Test>("erc20_evm_bytecode.txt", false).unwrap();
 	
 	ExtBuilder::default()
 	.existential_deposit(100)
 	.build()
 	.execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = Balances::deposit_creating(&ALICE, 10_000_000_000_000);
 		let subsistence = Contracts::subsistence_threshold();
-
+		
 		// 2. Create wasm contract
+		let mut a: [u8; 4] = Default::default();
+		a.copy_from_slice(&BlakeTwo256::hash(b"new")[0..4]);		
+		let new_call = ExecutionInput::new( Selector::new(a) );
+	
+		let init_supply: <Test as pallet_balances::Config>::Balance  = 100_000_000_000_000_000_000_000;
+		let new_call = new_call.push_arg(init_supply);
 		let creation = Contracts::instantiate_with_code(
-			Origin::signed(ALICE),
-			subsistence * 100,
+			Origin::signed(ALICE.clone()),
+			subsistence * 10_000_000,
 			GAS_LIMIT,
 			wasm,
-			vec![],
+			new_call.encode(),
 			vec![],
 		);
+		
+		assert_ok!(creation);
 		let wasm_addr = Contracts::contract_address(&ALICE, &wasm_code_hash, &[]);
 
-		assert_ok!(creation);
 		assert!(ContractInfoOf::<Test>::contains_key(&wasm_addr));	
 		
-		//3. Create EVM contract
+		//3. Create EVM contract  and tranfer to bob token
 		let source = H160::from_slice(&(AsRef::<[u8; 32]>::as_ref(&ALICE)[0..20]));
 		
-		//EVM::Config::CallOrigin::ensure_address_origin(&source, origin)?;
-		
-		let creation4evm = <Test as pallet_evm::Config>::Runner::create(   //EVM::create(
-			//Origin::signed(ALICE),
+		let creation4evm = <Test as pallet_evm::Config>::Runner::create(   
 			source,
 			evm,
 			U256::default(),
-			1000000,
+			100_000_000_000,
 			Some(U256::default()),
 			Some(U256::from(0)),
 			<Test as pallet_evm::Config>::config(),
@@ -395,14 +424,56 @@ fn test_wasm_call_evm(){
 				evm_addr = create_address;
 			},
 			CreateInfo {
-				exit_reason: _,
+				exit_reason: reason,
 				value: _,
 				..
 			} => {
-				panic!("Create EVM Contract failed!");
+				panic!("Create EVM Contract failed!({:?})", reason);
 			},
 		}
 		
+		//3.1 Alice tranfer token to  Bob
+		let transfer_selector = &Keccak256::digest(b"transfer(address,uint256)")[0..4];
+		
+		let source_bob = H160::from_slice(&(AsRef::<[u8; 32]>::as_ref(&BOB)[0..20]));
+		let token: u128 = 1_883_000_000_000_000_000;
+		
+		let fun_para: [u8;20] = source_bob.into();
+		let transfer_input = [&transfer_selector[..], &[0u8;12], &fun_para, &[0u8;16], &token.to_be_bytes()].concat();		
+		
+		let call4evm = <Test as pallet_evm::Config>::Runner::call(
+				source,
+				evm_addr,
+				transfer_input.clone(),
+				U256::default(),
+				100_000_000,
+				Some(U256::default()),
+				Some(U256::from(1)),
+				<Test as pallet_evm::Config>::config(),
+			);
+
+		assert_ok!(&call4evm);
+		
+		let transfer_result: u128;
+		
+		match call4evm.unwrap() {
+			CallInfo {
+				exit_reason: ExitReason::Succeed(_),
+				value: return_value,
+				..
+			} => {
+				let mut a: [u8; 16] = Default::default();
+				a.copy_from_slice(&return_value[16..32]);
+				transfer_result = u128::from_be_bytes(a);
+			},
+			CallInfo {
+				exit_reason: reason,
+				value: _,
+				..			
+			} => {
+				panic!("Call EVM Contract balanceOf failed!({:?})", reason);
+			},
+		};
 		
 		//4. Get BOB balance of EVM token
 		let balance_of_selector = &Keccak256::digest(b"balanceOf(address)")[0..4];
@@ -410,14 +481,14 @@ fn test_wasm_call_evm(){
 		let source_bob = H160::from_slice(&(AsRef::<[u8; 32]>::as_ref(&BOB)[0..20]));
 			
 		let fun_para: [u8;20] = source_bob.into();
-		let balance_of_input = [&balance_of_selector[..], &fun_para, &[0u8,12]].concat();		
+		let balance_of_input = [&balance_of_selector[..], &[0u8;12], &fun_para].concat();		
 		
 		let call4evm = <Test as pallet_evm::Config>::Runner::call(
 				source_bob,
 				evm_addr,
 				balance_of_input.clone(),
 				U256::default(),
-				1000000,
+				100_000_000,
 				Some(U256::default()),
 				Some(U256::from(0)),
 				<Test as pallet_evm::Config>::config(),
@@ -438,32 +509,33 @@ fn test_wasm_call_evm(){
 				bob_balance_before = u128::from_be_bytes(a);
 			},
 			CallInfo {
-				exit_reason: _,
+				exit_reason: reason,
 				value: _,
 				..			
 			} => {
-				panic!("Call EVM Contract balanceOf failed!");
+				panic!("Call EVM Contract balanceOf failed!({:?})", reason);
 			},
 		};
+		println!("bob_balance_before={}",bob_balance_before);
 		
 		//5.  Call wasm contract to call evm transfer evm token to bob.  H160: evm contract address, H160: bob's address  u128: value
 		let mut a: [u8; 4] = Default::default();
-		a.copy_from_slice(&Keccak256::digest(b"wasmCallEvm")[0..4]);
+		a.copy_from_slice(&BlakeTwo256::hash(b"wasmCallEvm")[0..4]);
 		let call = ExecutionInput::new(Selector::new(a));
 		
-		let fun_para: [u8; 20] = source_bob.into();
-		let tranfer_value: u128  = 12000000000000000000;
+		let transfer_value: u128  = 12000000000000000000;
 		
-		let call = call.push_arg(&evm_addr).push_arg(&fun_para).push_arg(tranfer_value);
-				
-		assert_ok!(Contracts::call(
-				Origin::signed(ALICE),
+		let call = call.push_arg(format!("0x{:x}", evm_addr)).push_arg(format!("0x{:x}", source_bob)).push_arg(transfer_value);
+		
+		let result = Contracts::bare_call(
+				ALICE, 
 				wasm_addr,
 				0,
 				GAS_LIMIT,
 				Encode::encode(&call).to_vec(),
-			)	
-		);		
+			).exec_result.unwrap();
+		assert!(result.is_success());
+		println!("Alice transfer to Bob from wasm_call_evm:{}", transfer_value);
 		
 		//6. Get BOB balance of EVM token
 		let call4evm = <Test as pallet_evm::Config>::Runner::call(
@@ -471,9 +543,9 @@ fn test_wasm_call_evm(){
 				evm_addr,
 				balance_of_input,
 				U256::default(),
-				1000000,
+				100_000_000,
 				Some(U256::default()),
-				Some(U256::from(0)),
+				Some(U256::from(1)),
 				<Test as pallet_evm::Config>::config(),
 			);
 
@@ -492,16 +564,16 @@ fn test_wasm_call_evm(){
 				bob_balance_after = u128::from_be_bytes(a);
 			},
 			CallInfo {
-				exit_reason: _,
+				exit_reason: reason,
 				value: _,
 				..			
 			} => {
-				panic!("Call EVM Contract balanceOf failed!");
+				panic!("Call EVM Contract balanceOf failed!({:?})", reason);
 			},
 		};		
-		
+		println!("bob_balance_after={}",bob_balance_after);
 		//7. Test  the balance of BOB being correct
-		assert_eq!(bob_balance_after, bob_balance_before + tranfer_value);	
+		assert_eq!(bob_balance_after, bob_balance_before + transfer_value);	
 	});
 }
 
@@ -509,25 +581,35 @@ fn test_wasm_call_evm(){
 // Perform test for EVM contract  calling  wasm contract
 #[test]
 fn test_evm_call_wasm(){
-	
+	let mut data = [0u8; 32];
+	data[0..20].copy_from_slice(&[1u8; 20]);
+	let ALICE: AccountId32 = AccountId32::new(data.clone());
+	data[0..20].copy_from_slice(&[2u8; 20]);
+	let BOB: AccountId32 = AccountId32::new(data);
 	// 1.  Get wasm and evm contract bin
-	let (wasm, wasm_code_hash) = contract_module::<Test>("wasm_contract_test").unwrap();
-	let (evm, _evm_code_hash) = contract_module::<Test>("evm_contract_test").unwrap();
+	let (wasm, wasm_code_hash) = contract_module::<Test>("erc20.wasm", true).unwrap();
+	let (evm, _evm_code_hash) = contract_module::<Test>("erc20_evm_bytecode.txt", false).unwrap();
 	
 	ExtBuilder::default()
 	.existential_deposit(100)
 	.build()
 	.execute_with(|| {
-		let _ = Balances::deposit_creating(&ALICE, 1_000_000);
+		let _ = Balances::deposit_creating(&ALICE, 10_000_000_000_000);
 		let subsistence = Contracts::subsistence_threshold();
 
 		// 2. Create wasm contract
+		let mut a: [u8; 4] = Default::default();
+		a.copy_from_slice(&BlakeTwo256::hash(b"new")[0..4]);		
+		let new_call = ExecutionInput::new( Selector::new(a) );
+	
+		let init_supply: <Test as pallet_balances::Config>::Balance  = 100_000_000_000_000_000_000_000;
+		let new_call = new_call.push_arg(init_supply);
 		let creation = Contracts::instantiate_with_code(
-			Origin::signed(ALICE),
-			subsistence * 100,
+			Origin::signed(ALICE.clone()),
+			subsistence  * 10_000_000,
 			GAS_LIMIT,
 			wasm,
-			vec![],
+			new_call.encode(),
 			vec![],
 		);
 		let wasm_addr = Contracts::contract_address(&ALICE, &wasm_code_hash, &[]);
@@ -535,17 +617,33 @@ fn test_evm_call_wasm(){
 		assert_ok!(creation);
 		assert!(ContractInfoOf::<Test>::contains_key(&wasm_addr));	
 		
+		//2.1 Transfer Token to BOB
+		let mut a: [u8; 4] = Default::default();
+		a.copy_from_slice(&BlakeTwo256::hash(b"transfer")[0..4]);		
+		let transfer_call = ExecutionInput::new( Selector::new(a) );
+		
+		let token: <Test as pallet_balances::Config>::Balance  = 1_213_000_789_000_000_000_000;		
+		let transfer_call = transfer_call.push_arg(&BOB).push_arg(token);
+		
+		let result = Contracts::bare_call(
+					ALICE.clone(),
+					wasm_addr.clone(),
+					0,
+					GAS_LIMIT,
+					transfer_call.encode(),
+				).exec_result.unwrap();
+				
+		assert!(result.is_success());
+		
 		//3. Create EVM contract
 		let source = H160::from_slice(&(AsRef::<[u8; 32]>::as_ref(&ALICE)[0..20]));
-				
-		//EVM::Config::CallOrigin::ensure_address_origin(&source, origin)?;
 		
 		let creation4evm = <Test as pallet_evm::Config>::Runner::create(
 			//Origin::signed(ALICE),
 			source,
 			evm,
 			U256::default(),
-			1000000,
+			100_000_000,
 			Some(U256::default()),
 			Some(U256::from(0)),
 			<Test as pallet_evm::Config>::config(),
@@ -554,7 +652,6 @@ fn test_evm_call_wasm(){
 		assert_ok!(&creation4evm);
 		
 		let evm_addr: H160;
-		
 		match creation4evm.unwrap() {
 			CreateInfo {
 				exit_reason: ExitReason::Succeed(_),
@@ -564,74 +661,78 @@ fn test_evm_call_wasm(){
 				evm_addr = create_address;
 			},
 			CreateInfo {
-				exit_reason: _,
+				exit_reason: reason,
 				value: _,
 				..
 			} => {
-				panic!("Create EVM Contract failed!");
+				panic!("Create EVM Contract failed!({:?})", reason);
 			},
 		}
 		
-		
 		//4. Get BOB balance of wasm token
 		let mut a: [u8; 4] = Default::default();
-		a.copy_from_slice(&Keccak256::digest(b"balanceOf")[0..4]);		
+		a.copy_from_slice(&BlakeTwo256::hash(b"balance_of")[0..4]);		
 		let balance_of_call = ExecutionInput::new( Selector::new(a) );
 		
 		let source_bob = H160::from_slice(&(AsRef::<[u8; 32]>::as_ref(&BOB)[0..20]));
 				
-		let balance_of_call = balance_of_call.push_arg(source_bob);
+		let balance_of_call = balance_of_call.push_arg(&BOB);
 						
 		let result = Contracts::bare_call(
-					BOB,
+					BOB.clone(),
 					wasm_addr.clone(),
 					0,
 					GAS_LIMIT,
-					Encode::encode(&balance_of_call).to_vec(),
+					//Encode::encode(&balance_of_call).to_vec(),
+					balance_of_call.encode(),
 				).exec_result.unwrap();
 		assert!(result.is_success());
 		
+		println!("result data before:{:?}", result);
 		let bob_balance_before = result.data;
+		
 				
 		//5.  Call EVM contract to call wasm contract transfer wasm token to bob,  the last bytes32 is the wasm contract accountid
 		let evm_call_wasm_selector = &Keccak256::digest(b"evmCallWasm(bytes32,uint256,bytes32)")[0..4];
 		let fun_para: [u8; 20] = source_bob.into();
-		let tranfer_value: u128  = 12000000000000000000;
+		let transfer_value: u128  = 12000000000000000000;
 		
 		let wasm_contract: [u8; 32] = wasm_addr.clone().into();
 				
-		let evm_call_wasm_input = [&evm_call_wasm_selector[..], &fun_para[..], &[0u8,16], &tranfer_value.to_be_bytes(), &wasm_contract].concat();
+		let evm_call_wasm_input = [&evm_call_wasm_selector[..], AsRef::<[u8; 32]>::as_ref(&BOB), &[0u8;16], &transfer_value.to_be_bytes(), &wasm_contract].concat();
 		
 		let source_alice = H160::from_slice(&(AsRef::<[u8; 32]>::as_ref(&ALICE)[0..20]));
-			
+		
 		let call4evm = <Test as pallet_evm::Config>::Runner::call(
 				source_alice,
 				evm_addr,
 				evm_call_wasm_input,
 				U256::default(),
-				1000000,
+				100_000_000_000,
 				Some(U256::default()),
-				Some(U256::from(0)),
+				Some(U256::from(1)),
 				<Test as pallet_evm::Config>::config(),
 			);
+		assert_ok!(&call4evm);
+		assert!(&call4evm.unwrap().exit_reason.is_succeed());
+		println!("Alice transfer to Bob from evm_call_wasm:{}", transfer_value);
 
-		assert_ok!(call4evm);
-		
 		//6. Get BOB balance of wasm token
 		let result = Contracts::bare_call(
-					BOB,
+					BOB.clone(),
 					wasm_addr.clone(),
 					0,
 					GAS_LIMIT,
 					Encode::encode(&balance_of_call).to_vec(),
 				).exec_result.unwrap();
 		assert!(result.is_success());
-		
-		let bob_balance_after = result.data;
+	
+		println!("result data after:{:?}", result);
+		let bob_balance_after = result.data;		
 				
 		//7. Test  the balance of BOB being correct
 		let after = <u128 as Decode>::decode(&mut &bob_balance_after[..]).unwrap();
 		let before = <u128 as Decode>::decode(&mut &bob_balance_before[..]).unwrap();
-		assert_eq!(after, before + tranfer_value);	
+		assert_eq!(after, before + transfer_value);	
 	});
 }

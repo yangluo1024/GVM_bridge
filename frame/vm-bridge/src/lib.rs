@@ -1,7 +1,8 @@
 // Copyright (C) 2021 Cycan Technologies
 //
 // Licensed under the Business Source License included in the file License.
-
+// 
+// Only support EVM  contracts which its parameter data max value below 128bit for the time being
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(destructuring_assignment)]
@@ -18,6 +19,7 @@ use pallet_contracts::chain_extension::{
 };
 
 use sp_runtime::app_crypto::sp_core::{H160, U256};
+use sp_runtime::traits::UniqueSaturatedInto;
 use serde::{Deserialize, Serialize};
 
 use pallet_evm::Runner;
@@ -37,18 +39,18 @@ mod tests;
 
 extern crate serde_json; 
 
-#[derive(Deserialize, Encode, Decode)]
+#[derive(Deserialize, Encode, Decode, Debug)]
 #[allow(non_snake_case)]
 struct CallVM  {
-	VM: Vec<u8>,
-	Account: Vec<u8>,
-	Fun: Vec<u8>,
+	VM: String,
+	Account: String,
+	Fun: String,
 	InputType: Vec<String>,
 	InputValue:Vec<String>,
 	OutputType:Vec<Vec<String>>,
 }
 
-#[derive(Deserialize, Encode, Decode, Serialize)]
+#[derive(Deserialize, Encode, Decode, Serialize, Debug)]
 #[allow(non_snake_case)]
 struct CallReturn  {
 	Result: u32,
@@ -183,7 +185,7 @@ pub mod pallet {
 			let input: Vec<u8>;
 			let target: AccountId32;
 			
-			match vm_codec::wasm_encode(&data) {		//(input:Vec<u8>, target:AccountId32)		
+			match vm_codec::wasm_encode(&data[32..].iter().cloned().collect()) {
 				Ok(r) => (input, target) = r,
 				Err(e) => return Err(DispatchError::from(str2s(e.to_string()))),
 			}
@@ -194,20 +196,27 @@ pub mod pallet {
 				None => (),
 			}
 			
-			let origin = ensure_signed(origin)?;   //ensure_signed
-			let target = T::AccountId::from(target);       //T::AccountId::decode(&mut &bytes[..]).unwrap_or_default();
-			let info = pallet_contracts::Pallet::<T>::bare_call(origin, target, 0.into(), gas_limit, input);
+			let origin = ensure_signed(origin)?;
+			let target = T::AccountId::from(target);
 			
+			let info = pallet_contracts::Pallet::<T>::bare_call(
+					origin,
+					target,
+					0.into(),
+					gas_limit,
+					input
+				);
+	
 			let output: ResultBox<Vec<u8>>;
 			match info.exec_result {
 				Ok(return_value) => {
 					if return_value.is_success() {
-						output = vm_codec::wasm_decode(&data, &return_value.data, true, "");
+						output = vm_codec::wasm_decode(&data[32..].iter().cloned().collect(), &return_value.data, true, "");
 					} else {
-						output = vm_codec::wasm_decode(&data, &Vec::new(), false, "Call wasm contract failed");
+						return Err(DispatchError::from("Call wasm contract failed(REVERT)"));
 					}
 				},
-				Err(e) => output = vm_codec::wasm_decode(&data, &Vec::new(), false, e.error.into()),
+				Err(e) => return Err(e.error),
 			}
 			
 			match output {
@@ -239,18 +248,28 @@ pub mod pallet {
 			let input: Vec<u8>;
 			let target: H160;
 		
-			match vm_codec::evm_encode(&input0) {			//(input:Vec<u8>, target:H160)
+			match vm_codec::evm_encode(&input0) {		
 				Ok(r) => (input, target) = r,
-				Err(e) => return Err(DispatchError::from(str2s(e.to_string()))),
+				Err(e) => {
+					return Err(DispatchError::from(str2s(e.to_string())));
+				},
 			}
-			
-
-		
-			let info = <C as pallet_evm::Config>::Runner::call(source, target, input, U256::from(0), 30000000, Some(U256::from(61)),None,C::config());
+					
+			let info = <C as pallet_evm::Config>::Runner::call(
+				source, 
+				target, 
+				input, 
+				U256::default(), 
+				100_000_000_000,  
+				Some(U256::default()),
+				Some(pallet_evm::Module::<C>::account_basic(&source).nonce),
+				C::config()
+			);
 			
 			let output: ResultBox<Vec<u8>>;
 			match info {
 				Ok(r) => {
+				
 					match r {
 						ExecutionInfo { 	
 							exit_reason:success,
@@ -261,14 +280,26 @@ pub mod pallet {
 								output = vm_codec::evm_decode(&input0, &v1, true, "");
 							}
 							else {
-								output = vm_codec::evm_decode(&input0, &Vec::new(), false, "Call EVM failed");
+								return Err(DispatchError::from("Call EVM failed "));
 							}
 						}, 
 					}
 				},
-				Err(_) => return Err(DispatchError::from("Call EVM failed out")),
+				Err(e) => {
+					let err_str: &str;
+					match e {
+							BalanceLow => err_str = "Call EVM BalanceLow",
+							FeeOverflow => err_str = "Call EVM FeeOverflow",
+							PaymentOverflow => err_str = "Call EVM PaymentOverflow",
+							WithdrawFailed => err_str = "Call EVM WithdrawFailed ",
+							GasPriceTooLow => err_str = "Call EVM GasPriceTooLow ",
+							InvalidNonce => err_str = "Call EVM InvalidNonce ",
+							_ => err_str = "Call EVM OtherError. ",
+					}		
+					return Err(DispatchError::from(err_str));
+				},
 			}
-		
+			
 			match output {
 				Ok(r) => {
 					let output = envbuf.write(&r, false, None).map_err(|_| DispatchError::from("ChainExtension failed to write result"));
@@ -307,7 +338,7 @@ impl Error for CustomError {}
 
 mod vm_codec {
 	use crate::{H160, CallVM, CallReturn, CustomError};
-	use frame_support::sp_runtime::AccountId32;
+	use sp_runtime::{AccountId32, traits::{BlakeTwo256, Hash}};
 	use std::error::Error;			
 	use codec::Compact;
 	use core::mem::size_of;
@@ -352,11 +383,10 @@ mod vm_codec {
 	
 	pub fn evm_encode(input: &Vec<u8>) -> Result<(Vec<u8>, H160)>{
 		let call_vm: CallVM = serde_json::from_slice(input.as_slice())?;
-		
-		let account = String::from_utf8(call_vm.Account)?;
+		let account = call_vm.Account;
 		let target = H160::from_str(&account)?;
 	
-		let selector = &Keccak256::digest(&call_vm.Fun)[0..4];
+		let selector = &Keccak256::digest(call_vm.Fun.as_bytes())[0..4];
 		let mut offset: u128 = (call_vm.InputType.len() * 32).try_into().unwrap_or_default();
 		let mut data: Vec<u8> = Vec::new();
 		let mut data_ex: Vec<u8> = Vec::new();
@@ -367,7 +397,6 @@ mod vm_codec {
 		// uint int using big endian, and patch 0 in high bit.  else for address byte patch 0 in low bit.
 		// array's inputValue: len, v1,v2, ..., vlen.
 		for p in call_vm.InputType {
-			i = i + 1;
 			let value = call_vm.InputValue.get(i).ok_or(CustomError::new("Data number error"))?;
 			let mut value_data: Vec<u8> = Vec::new();
 			match p.as_ref() {
@@ -500,24 +529,25 @@ mod vm_codec {
 				_ => (),
 			}
 			data.append(&mut value_data);
+			i = i + 1;
 		}
 				
 		let input = [&selector[..], &data[..], &data_ex[..]].concat();
-		
 		Ok((input.to_vec(), target))
 	}
 	
 	macro_rules! array_decode_head{
 		($output_value:ident, $offset:ident, $output:ident, $call_return:ident, $datalen:ident)=>(			
 							$offset = u128::from_be_bytes($output_value) as usize;
-							let out_data = $output[$offset..$offset+32].try_into()?;
+							let mut out_data:[u8; 16] = Default::default();
+							out_data.copy_from_slice(&$output[$offset+16..$offset+32]);
 							$datalen = u128::from_be_bytes(out_data) as usize;	
 							$call_return.ReturnValue.push($datalen.to_string());
 		)
 	}	
 	
 	pub fn evm_decode(input: &Vec<u8>, output: &Vec<u8>, succ: bool, mesg: &str) -> Result<Vec<u8>> {
-		let call_vm: CallVM = serde_json::from_slice(input.as_slice())?;
+
 		let mut call_return: CallReturn = CallReturn {
 			Result: 0,
 			Message:  Default::default(),
@@ -526,15 +556,23 @@ mod vm_codec {
 	    
 		match succ {
 			true => {
+				let call_vm: CallVM = serde_json::from_slice(input.as_slice())?;
+			
 				call_return.Result = 0;
 				call_return.Message = String::from(mesg);
 				let mut i: usize = 0;
 				
 				let output_type_main = call_vm.OutputType.get(0).ok_or(CustomError::new("OutputType parameter error"))?;
 				
+				let mut output_value: [u8; 16] = Default::default();
+				let mut output_value32: [u8; 32] = Default::default();
+				let mut output_addr: [u8; 20] = Default::default();
+				let mut out_value: [u8; 16] = Default::default();
+				
 				for p in output_type_main {
-					let output_value = output[i*32..(i+1)*32].try_into()?;
-					let output_addr = &output[i*32+12..(i+1)*32];
+					output_value.copy_from_slice(&output[i*32+16..(i+1)*32]);
+					output_value32.copy_from_slice(&output[i*32..(i+1)*32]);
+					output_addr.copy_from_slice(&output[i*32+12..(i+1)*32]);
 					match p.as_ref() {
 						"address" => {
 							let data_str = hex::encode(output_addr);			
@@ -563,19 +601,19 @@ mod vm_codec {
 						"string" => {
 							let uintdata = u128::from_be_bytes(output_value) as usize;
 							
-							let out_value = output[uintdata..uintdata+32].try_into()?;
+							out_value.copy_from_slice(&output[uintdata+16..uintdata+32]);
 							let datalen = u128::from_be_bytes(out_value) as usize;							
-							let data = &output[uintdata+1..uintdata+1+datalen];
+							let data = &output[uintdata+32..uintdata+32+datalen];
 							let data_str = String::from_utf8(data.to_vec())?;
 							
 							call_return.ReturnValue.push(data_str);
 						},
-						"bytes" => {
+						"bytes[]" => {
 							let uintdata = u128::from_be_bytes(output_value) as usize;
 							
-							let out_value = output[uintdata..uintdata+32].try_into()?;
+							out_value.copy_from_slice(&output[uintdata+16..uintdata+32]);
 							let datalen = u128::from_be_bytes(out_value) as usize;							
-							let databuf = &output[uintdata+1..uintdata+1+datalen];
+							let databuf = &output[uintdata+32..uintdata+32+datalen];
 							let data_str = hex::encode(databuf);
 							
 							call_return.ReturnValue.push(String::from(data_str));
@@ -586,8 +624,8 @@ mod vm_codec {
 							array_decode_head!(output_value, offset, output, call_return, datalen);
 							let mut j: usize = 0;
 							while j < datalen {
-								let out_value = &output[offset+j*32+12..offset+(j+1)*32];
-								let data_str = hex::encode(out_value);			
+								let out_value = &output[offset+j*32..offset+(j+1)*32];
+								let data_str = hex::encode(&out_value[12..32]);			
 								call_return.ReturnValue.push(data_str);
 								j += 1;
 							}
@@ -598,7 +636,7 @@ mod vm_codec {
 							array_decode_head!(output_value, offset, output, call_return, datalen);
 							let mut j: usize = 0;
 							while j < datalen {
-								let out_value = output[offset+j*32+12..offset+(j+1)*32].try_into()?;
+								out_value.copy_from_slice(&output[offset+j*32+16..offset+(j+1)*32]);
 								let uintdata = u128::from_be_bytes(out_value);
 								call_return.ReturnValue.push(uintdata.to_string());
 								j += 1;								
@@ -610,7 +648,7 @@ mod vm_codec {
 							array_decode_head!(output_value, offset, output, call_return, datalen);
 							let mut j: usize = 0;
 							while j < datalen {
-								let out_value = output[offset+j*32+12..offset+(j+1)*32].try_into()?;
+								out_value.copy_from_slice(&output[offset+j*32+16..offset+(j+1)*32]);
 								let intdata = i128::from_be_bytes(out_value);
 								call_return.ReturnValue.push(intdata.to_string());	
 								j += 1;					
@@ -622,7 +660,7 @@ mod vm_codec {
 							array_decode_head!(output_value, offset, output, call_return, datalen);
 							let mut j: usize = 0;
 							while j < datalen {
-								let out_value = &output[offset+j*32+12..offset+(j+1)*32];
+								let out_value = &output[offset+j*32..offset+(j+1)*32];
 								let data_str = hex::encode(out_value);
 								call_return.ReturnValue.push(data_str);
 								j += 1;									
@@ -634,7 +672,7 @@ mod vm_codec {
 							array_decode_head!(output_value, offset, output, call_return, datalen);
 							let mut j: usize = 0;
 							while j < datalen {
-								let out_value = output[offset+j*32+12..offset+(j+1)*32].try_into()?;
+								out_value.copy_from_slice(&output[offset+j*32+16..offset+(j+1)*32]);
 								let uintdata = u128::from_be_bytes(out_value);
 								match uintdata {
 									0 =>  call_return.ReturnValue.push("false".to_string()),
@@ -655,18 +693,17 @@ mod vm_codec {
 		}
 		
 		let return_json = serde_json::to_string(&call_return)?;
-		Ok(return_json.into_bytes())
+		Ok(String::encode(&return_json))
 	}
 
 
 
 	pub fn wasm_encode(input: &Vec<u8>) -> Result<(Vec<u8>, AccountId32)>{
 		let call_vm: CallVM = serde_json::from_slice(input.as_slice())?;
-		
-		let account = String::from_utf8(call_vm.Account)?;
+		let account = call_vm.Account;
 		let target = AccountId32::from_str(&account)?;
 	
-		let selector = &Keccak256::digest(&call_vm.Fun)[0..4];
+		let selector = &BlakeTwo256::hash(call_vm.Fun.as_bytes())[0..4];
 		let mut data: Vec<u8> = Vec::new();
 		let mut i: usize = 0;
 		
@@ -675,7 +712,6 @@ mod vm_codec {
 		//    The upper six bits are the number of bytes following
 		// list inputValue: Vector u8 u8 u8    "3", "12","34","56"
 		for p in call_vm.InputType {
-			i = i + 1;
 			let value = call_vm.InputValue.get(i).ok_or(CustomError::new("Data number error"))?;
 			let mut value_data: Vec<u8> = Vec::new();
 			match p.as_ref() {
@@ -704,13 +740,13 @@ mod vm_codec {
 					value_data.append(&mut Compact(val).encode());
 				},
 				"accountid" => {
-					value_data.append(&mut Compact(32u8).encode());
 					let mut data1 = hex::decode(&value[2..])?;
 					value_data.append(&mut data1);
 				}
 				_ => (),
 			}
 			data.append(&mut value_data);
+			i = i + 1;
 		}
 				
 		let input = [&selector[..], &data[..]].concat();
@@ -734,7 +770,7 @@ mod vm_codec {
 	//example Vec   [ ...  "10", ...]   10th ["u8","string"...]  "0" means none
 	//example Enum  [ ...  "13", ...]   13th ["16","17","18"]    16th ["u8","string"] "0" means none  index is the index position's type
 	pub fn wasm_decode(input: &Vec<u8>, output: &Vec<u8>, succ: bool, mesg: &str) -> Result<Vec<u8>> {
-		let call_vm: CallVM = serde_json::from_slice(input.as_slice())?;
+
 		let mut call_return: CallReturn = CallReturn {
 			Result: 0,
 			Message:  Default::default(),
@@ -743,10 +779,12 @@ mod vm_codec {
 	    
 		match succ {
 			true => {
+				let call_vm: CallVM = serde_json::from_slice(input.as_slice())?;
+				
 				call_return.Result = 0;
 				call_return.Message = String::from(mesg);
 				
-				let mut offset: usize = 0;			
+				let mut offset: usize = 0;				
 				get_wasm_decode(&call_vm.OutputType, &output, &mut offset, &mut call_return, 0)?;
 				
 			},
@@ -757,12 +795,17 @@ mod vm_codec {
 		}
 		
 		let return_json = serde_json::to_string(&call_return)?;
-		Ok(return_json.into_bytes())		
+		let return_bytes = return_json.into_bytes();
+		let return_bytes_len:u128 = return_bytes.len().try_into()?;
+		let return_result = [&[0u8; 16][..], &return_bytes_len.to_be_bytes(), &return_bytes].concat();
+		Ok(return_result)
 	}
 	
 	fn get_wasm_decode(output_type: &Vec<Vec<String>>, output: &Vec<u8>, offset:&mut usize, call_return:&mut CallReturn, index: usize)-> Result<bool> {
-		let mut i: usize = 0;
+		
 		let output_type_index = output_type.get(index).ok_or(CustomError::new("OutputType number error"))?;
+	
+		let mut i: usize = 0;
 		for p in output_type_index {
 					match p.as_ref() {
 						"u8" => call_return.ReturnValue.push( to_string_value::<u8>(&output, offset)),
@@ -804,6 +847,7 @@ mod vm_codec {
 							let type_index = output_type.get(index+1).ok_or(CustomError::new("OutputType number error"))?;
 							let type_index = type_index.get(i).ok_or(CustomError::new("OutputType number error"))?;
 							let type_index = type_index.parse::<usize>()?;
+							i = i + 1;
 							
 							if type_index > 0 {
 								let mut j: usize = 0;
@@ -818,12 +862,12 @@ mod vm_codec {
 							let a = output[*offset] as usize;
 							call_return.ReturnValue.push( to_string_value::<u8>(&output, offset));
 							
-							let type_index_info = output_type.get(index+1).ok_or(CustomError::new("OutputType number error"))?;
-							let type_index_info = type_index_info.get(i).ok_or(CustomError::new("OutputType number error"))?;
-							let type_index_info = type_index_info.parse::<usize>()?;
-							
-							if type_index_info > 0 {
-								let type_index = output_type.get(type_index_info).ok_or(CustomError::new("OutputType number error"))?;
+							let type_index = output_type.get(index+1).ok_or(CustomError::new("OutputType number error"))?;
+							let type_index = type_index.get(i).ok_or(CustomError::new("OutputType number error"))?;
+							let type_index = type_index.parse::<usize>()?;
+							i = i + 1;
+							if type_index > 0 {
+								let type_index = output_type.get(type_index).ok_or(CustomError::new("OutputType number error"))?;
 								let type_index = type_index.get(a).ok_or(CustomError::new("OutputType number error"))?;
 								let type_index = type_index.parse::<usize>()?;
 								if type_index > 0 {
@@ -833,7 +877,6 @@ mod vm_codec {
 						},
 						_ => (),				
 				}		
-				i += 1;
 		}
 		
 		Ok(true)
@@ -847,7 +890,7 @@ mod vm_codec {
 		($($a:ty),+) => {
 			$(impl FromBeBytes<$a> for $a {
 				fn from_be_bytes(d: &[u8]) ->$a {
-					<$a>::from_be_bytes(d.try_into().unwrap())
+					<$a>::from_be_bytes(d.try_into().unwrap_or_default())
 				}
 			})+
 		}
