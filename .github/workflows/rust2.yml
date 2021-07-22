@@ -21,6 +21,6 @@ jobs:
     - name: Setup env
       run: rustup target add wasm32-unknown-unknown --toolchain nightly-2021-03-01-x86_64-unknown-linux-gnu
     - name: Build
-      run: cargo +nightly-2021-03-01 build --verbose
+      run: cargo +nightly-2021-03-01 build
     - name: Test
       run: cargo +nightly-2021-03-01 test
