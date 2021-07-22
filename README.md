@@ -54,6 +54,31 @@ early development will only provide the GVM Bridge pallet, it include functions 
 1. Implement the pre-compiled VM call function for contract inter-calls.
 2. Provide EvmChainExtention trait.
 
+### Getting Started
+Follow the steps below to get started with GVM Bridge. 
+ 
+#### **Rust Setup**
+To start working with GVM Bridge you'll need to install [rustup](https://www.rustup.rs/), and install toolchain nightly-2021-03-01. If using x86_64 linux, you can do:
+
+```sh
+ rustup install nightly-2021-03-01
+ rustup target add wasm32-unknown-unknown --toolchain nightly-2021-03-01-x86_64-unknown-linux-gnu
+```
+
+#### **Build**
+Use Rust's native `cargo build` command to build GVM Bridge:
+
+```sh
+cargo +nightly-2021-03-01 build --verbose
+```
+
+#### **Test**
+Use Rust's native `cargo test` command to test GVM Bridge:
+
+```sh
+cargo +nightly-2021-03-01 test
+```
+
 -------
 #### **License**
 The project are currently licensed under [BSL](https://github.com/CycanTech/GVM-Bridge/blob/main/License)<br>
