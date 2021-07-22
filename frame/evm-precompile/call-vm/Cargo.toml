@@ -12,8 +12,8 @@ sp-runtime = { version = "3.0.0", default-features = false, git = "https://githu
 frame-support = { version = "3.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
 frame-system = { version = "3.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
 pallet-contracts = { version = "3.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
-pallet-evm = {version = "5.0.0-dev", default-features = false, git = "https://github.com/paritytech/frontier.git" }
-fp-evm = {version = "2.0.0", default-features = false, git = "https://github.com/paritytech/frontier.git" }
+pallet-evm = {version = "5.0.0-dev", default-features = false, git = "https://github.com/paritytech/frontier.git", rev = "955a8c0" }
+fp-evm = {version = "2.0.0", default-features = false, git = "https://github.com/paritytech/frontier.git", rev = "955a8c0" }
 evm = { version = "0.27.0", default-features = false, features = ["with-codec"] }
 codec = { package = "parity-scale-codec", version = "1.3.5", default-features = false }
 pallet-vm-bridge = { version = "0.1.0", path = "../../vm-bridge", default-features = false }
