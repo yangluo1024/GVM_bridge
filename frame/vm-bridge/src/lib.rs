@@ -19,7 +19,6 @@ use pallet_contracts::chain_extension::{
 };
 
 use sp_runtime::app_crypto::sp_core::{H160, U256};
-use sp_runtime::traits::UniqueSaturatedInto;
 use serde::{Deserialize, Serialize};
 
 use pallet_evm::Runner;
@@ -206,7 +205,6 @@ pub mod pallet {
 					gas_limit,
 					input
 				);
-	
 			let output: ResultBox<Vec<u8>>;
 			match info.exec_result {
 				Ok(return_value) => {
@@ -699,7 +697,7 @@ mod vm_codec {
 
 
 	pub fn wasm_encode(input: &Vec<u8>) -> Result<(Vec<u8>, AccountId32)>{
-		let call_vm: CallVM = serde_json::from_slice(input.as_slice())?;
+		let call_vm: CallVM = serde_json::from_slice(input.as_slice())?;		
 		let account = call_vm.Account;
 		let target = AccountId32::from_str(&account)?;
 	
@@ -804,7 +802,6 @@ mod vm_codec {
 	fn get_wasm_decode(output_type: &Vec<Vec<String>>, output: &Vec<u8>, offset:&mut usize, call_return:&mut CallReturn, index: usize)-> Result<bool> {
 		
 		let output_type_index = output_type.get(index).ok_or(CustomError::new("OutputType number error"))?;
-	
 		let mut i: usize = 0;
 		for p in output_type_index {
 					match p.as_ref() {
@@ -878,29 +875,28 @@ mod vm_codec {
 						_ => (),				
 				}		
 		}
-		
 		Ok(true)
 	}
 	
-	pub trait FromBeBytes<T> {
-		fn from_be_bytes(d: &[u8]) -> T;
+	pub trait FromLeBytes<T> {
+		fn from_le_bytes(d: &[u8]) -> T;
 	}
 	
-	macro_rules! impl_from_be_bytes{
+	macro_rules! impl_from_le_bytes{
 		($($a:ty),+) => {
-			$(impl FromBeBytes<$a> for $a {
-				fn from_be_bytes(d: &[u8]) ->$a {
-					<$a>::from_be_bytes(d.try_into().unwrap_or_default())
+			$(impl FromLeBytes<$a> for $a {
+				fn from_le_bytes(d: &[u8]) ->$a {
+					<$a>::from_le_bytes(d.try_into().unwrap_or_default())
 				}
 			})+
 		}
 	}	
-	impl_from_be_bytes!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
+	impl_from_le_bytes!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
 	
-	fn to_string_value<T: Sized+std::fmt::Display+FromBeBytes<T>>(output: &Vec<u8>, offset:&mut usize) -> String { 
+	fn to_string_value<T: Sized+std::fmt::Display+FromLeBytes<T>>(output: &Vec<u8>, offset:&mut usize) -> String { 
 		let width = size_of::<T>();
 		*offset +=  width;
-		let a: T = T::from_be_bytes(&output[*offset-width..*offset]);
+		let a: T = T::from_le_bytes(&output[*offset-width..*offset]);
 	
 		a.to_string()
 	}	
@@ -915,11 +911,11 @@ mod vm_codec {
 			0 =>  val =  a as usize,
 			1 => {
 			    let val_bytes = [a, output[*offset+1]];
-				val = u16::from_be_bytes(val_bytes) as usize;
+				val = u16::from_le_bytes(val_bytes) as usize;
 			},
 			2 => {
 			    let val_bytes = [a, output[*offset+1], output[*offset+2], output[*offset+3]];
-				val = u32::from_be_bytes(val_bytes) as usize;			
+				val = u32::from_le_bytes(val_bytes) as usize;			
 			},
 			_ => return Err(Box::new(CustomError::new("Not support."))),     //ob11 not support, which up six is the bignumber length.
 		}

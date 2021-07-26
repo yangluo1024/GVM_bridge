@@ -28,6 +28,7 @@ pub trait MyChainExtension {
         fn call_evm_extension(vm_input: &str) -> String;
 }
 
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
 pub enum CustomEnvironment {}
@@ -100,6 +101,8 @@ mod erc20 {
         InsufficientBalance,
         /// Returned if not enough allowance to fulfill a request is available.
         InsufficientAllowance,
+		/// Returned if other error.
+		OtherError(String),
     }
 
     /// The ERC-20 result type.
@@ -249,19 +252,51 @@ mod erc20 {
         ) -> Result<String> {
             //let caller = self.env().caller();
 
-			let mut input = r#"{"VM":"evm", "Account":"0x"#.to_string();
+			let mut input = r#"{"VM":"evm", "Account":""#.to_string();
 			input.push_str(&acnt);
-			input.push_str(r#"", "Fun":"transfer(address, uint256)", "InputType":["address","uint"], "InputValue":["0x"#);
+			input.push_str(r#"", "Fun":"transfer(address,uint256)", "InputType":["address","uint"], "InputValue":[""#);
 			input.push_str(&to);
 			input.push_str(r#"", ""#);
 			input.push_str(&value.to_string());
 			input.push_str(r#""],  "OutputType":[["bool"]]}"#);
 			
-			//input = '{"VM":"evm", "Account":"0x' + acnt.to_string() + '", "Fun":"transfer(address, uint256)", "InputType":["address","uint"], 
+			//input = '{"VM":"evm", "Account":"0x' + acnt.to_string() + '", "Fun":"transfer(address,uint256)", "InputType":["address","uint"], 
 			//"InputValue":["0x' + to.to_string() +'", "' + value.to_string() + '"],  "OutputType":[["bool"]]}';
 			
             let ret = self.env().extension().call_evm_extension(&input);
             Ok(ret)
+        }
+
+		// Test call EVM contract from this contract
+		#[ink(message)]
+        pub fn wasmCallEvmBalance(
+            &mut self,
+            acnt: String,
+            who: String,
+        ) -> Result<Balance> {
+            //let caller = self.env().caller();
+
+			let mut input = r#"{"VM":"evm", "Account":""#.to_string();
+			input.push_str(&acnt);
+			input.push_str(r#"", "Fun":"balanceOf(address)", "InputType":["address"], "InputValue":[""#);
+			input.push_str(&who);
+			input.push_str(r#""],  "OutputType":[["uint"]]}"#);
+			
+			//input = '{"VM":"evm", "Account":"0x' + acnt.to_string() + '", "Fun":"balanceOf(address)", "InputType":["address"], 
+			//"InputValue":["0x' + to.to_string()"],  "OutputType":[["uint"]]}';
+			
+            let ret = self.env().extension().call_evm_extension(&input);
+			let return_value_offset: usize;
+			match ret.find(r#""ReturnValue":[""#) {
+				Some(r) => return_value_offset = r,
+				None => return Err(Error::OtherError(String::from("Call EVM error, no ReturnValue!"))),
+			}
+			let result: Balance;
+			match ret[return_value_offset+16..ret.len()-3].parse::<Balance>() {
+				Ok(r) => result = r,
+				Err(e) => return Err(Error::OtherError(e.to_string())),
+			}
+            Ok(result)
         }		
     }
 
