@@ -51,6 +51,21 @@ contract TestEvmToken is ERC20 {
 		return _callWasmC(string(input1));
 	}
 	
+	function evmCallWasmBalance(bytes32 bob, bytes32 contractid) public returns (uint) {
+		
+		bytes memory input1 = bytes('{"VM":"wasm", "Account":"0x');
+		input1 = _bytesConcat(input1, bytes(_bytes32tohex(contractid)));
+		input1 = _bytesConcat(input1, bytes('", "Fun": "balance_of", "InputType": ["accountid"], "InputValue": ["0x'));
+		input1 = _bytesConcat(input1, bytes(_bytes32tohex(bob)));
+		input1 = _bytesConcat(input1, bytes('"], "OutputType":[["u128"]]}'));
+		
+		//string input = '{"VM":"wasm", "Account":"0x' + _bytes32tohex(contractid) + '", "Fun": "balance_of", "InputType": ["accountid"], 
+		//"InputValue": ["0x' + _bytes32tohex(bob)], "OutputType":[["u128"]]}';
+		
+		string memory result = _callWasmC(string(input1));
+		return getResultBalance(result);
+	}
+	
 	function _bytes32tohex(bytes32 b) internal pure returns (string memory) {
 		bytes memory bytesString = new bytes(64);
 		for (uint i = 0; i< b.length; i++) {
@@ -96,4 +111,30 @@ contract TestEvmToken is ERC20 {
 		 return ret;
 	 }
 	
+	function searchSubString(string memory _m, string memory _sub) internal pure returns (uint) {   // 0: not fund 
+		bytes memory a = bytes(_m);
+		bytes memory b = bytes(_sub);
+		for(uint i = 0; i < a.length; i ++){
+			if(b.length > a.length - i) return 0;
+			for(uint j=0; j<b.length; j++) {
+				if(b[j] != a[j+i]) break;
+				if(j == b.length - 1) return i+1;
+			}
+		}
+		return 0;
+	}
+	
+	function getResultBalance(string memory _result) internal pure returns (uint) {
+		uint st = searchSubString(_result, '"ReturnValue":["');		// {"Result":0,"Message":"","ReturnValue":["123456"]}
+		require(st>0, "Call Result error!");
+		bytes memory a = bytes(_result);
+		uint result = 0;
+		uint8 b = 0;
+		for(uint i = st-1+16; i < a.length-3; i ++){
+			b = uint8(a[i]);
+			require( b >= 48 && b <= 57, "Result balance include no number string!");
+			result = result*10 + (b - 48);
+		}
+		return result;
+	}
 }
