@@ -361,8 +361,12 @@ mod vm_codec {
 					$data_ex.extend_from_slice(&[0u8;16]);					
 					$data_ex.extend_from_slice(&hexlendata);
 					$data_ex.extend_from_slice((&$bytesdata));
-					
-					$offset = $offset + hexlen + 32;
+					let mod32 = hexlen % 32;
+					let zeros = [0u8; 32];
+					if mod32 > 0 {
+						$data_ex.extend_from_slice(&zeros[0..mod32 as usize]);
+					}
+					$offset = $offset + hexlen + mod32 + 32;
 		)
 	}
 	
@@ -419,10 +423,10 @@ mod vm_codec {
 					}
 					value_data.extend_from_slice(&hexdata);
 				},
-				"byte" => {
+				"bytes?" => {
 					let hexdata = hex::decode(value)?;
-					value_data.append(&mut vec![0u8;32-hexdata.len()]);
 					value_data.extend_from_slice(&hexdata);
+					value_data.append(&mut vec![0u8;32-hexdata.len()]);
 				},
 				"bool" => {
 					value_data = match value.as_ref() {
@@ -490,7 +494,7 @@ mod vm_codec {
 					}
 					offset = offset + datalen*32 + 32;				
 				},
-				"byte[]" => {
+				"bytes?[]" => {
 					let datalen: u128;
 					array_encode_head!(value, offset, value_data, data_ex, datalen);					
 					let mut j: u128 = 0;
@@ -498,8 +502,8 @@ mod vm_codec {
 						i = i + 1;
 						let value = call_vm.InputValue.get(i).ok_or(CustomError::new("Data number is error."))?;
 						let hexdata = hex::decode(value)?;
-						data_ex.append(&mut vec![0u8;32-hexdata.len()]);
 						data_ex.extend_from_slice(&hexdata);
+						data_ex.append(&mut vec![0u8;32-hexdata.len()]);
 						j += 1
 					}
 					offset = offset + datalen*32 + 32;	
@@ -536,9 +540,9 @@ mod vm_codec {
 	
 	macro_rules! array_decode_head{
 		($output_value:ident, $offset:ident, $output:ident, $call_return:ident, $datalen:ident)=>(			
-							$offset = u128::from_be_bytes($output_value) as usize;
+							$offset = u128::from_be_bytes($output_value) as usize + 32;
 							let mut out_data:[u8; 16] = Default::default();
-							out_data.copy_from_slice(&$output[$offset+16..$offset+32]);
+							out_data.copy_from_slice(&$output[$offset-16..$offset]);
 							$datalen = u128::from_be_bytes(out_data) as usize;	
 							$call_return.ReturnValue.push($datalen.to_string());
 		)
@@ -585,8 +589,8 @@ mod vm_codec {
 							let intdata = i128::from_be_bytes(output_value);
 							call_return.ReturnValue.push(intdata.to_string());		
 						},
-						"byte" => {
-							let data_str = hex::encode(output_value);
+						"bytes?" => {
+							let data_str = hex::encode(output_value32);
 							call_return.ReturnValue.push(data_str);
 						},
 						"bool" => {
@@ -606,7 +610,7 @@ mod vm_codec {
 							
 							call_return.ReturnValue.push(data_str);
 						},
-						"bytes[]" => {
+						"bytes" => {
 							let uintdata = u128::from_be_bytes(output_value) as usize;
 							
 							out_value.copy_from_slice(&output[uintdata+16..uintdata+32]);
@@ -652,7 +656,7 @@ mod vm_codec {
 								j += 1;					
 							}			
 						},
-						"byte[]" => {
+						"bytes?[]" => {
 							let offset:usize;
 							let datalen:usize;
 							array_decode_head!(output_value, offset, output, call_return, datalen);
@@ -697,7 +701,7 @@ mod vm_codec {
 
 
 	pub fn wasm_encode(input: &Vec<u8>) -> Result<(Vec<u8>, AccountId32)>{
-		let call_vm: CallVM = serde_json::from_slice(input.as_slice())?;		
+		let call_vm: CallVM = serde_json::from_slice(input.as_slice())?;	
 		let account = call_vm.Account;
 		let target = AccountId32::from_str(&account)?;
 	
@@ -733,7 +737,7 @@ mod vm_codec {
 					value_data.append(&mut u32::encode(&(c as u32)));
 				},
 				"string" => value_data.append(&mut String::encode(value)),
-				"vector" => {
+				"vec" => {
 					let val = value.parse::<u64>()?;
 					value_data.append(&mut Compact(val).encode());
 				},
@@ -826,8 +830,8 @@ mod vm_codec {
 						},
 						"string" => {   //Not support len>2**30-1 string
 							let (intlen,len) = get_compact_int(&output, offset)?;
-							let str_value = String::from_utf8(output[*offset+intlen..*offset+intlen+len*4].to_vec())?;
-							*offset += intlen + len*4;
+							let str_value = String::from_utf8(output[*offset+intlen..*offset+intlen+len].to_vec())?;
+							*offset += intlen + len;
 							call_return.ReturnValue.push(str_value);
 						},
 						"accounid" => {
@@ -836,7 +840,7 @@ mod vm_codec {
 							*offset += intlen + len*4;
 							call_return.ReturnValue.push(str_value);
 						},
-						"vector" => {   //Not support len>2**30-1 list or vector, 
+						"vec" => {   //Not support len>2**30-1 list or vector, 
 							let (intlen,len) = get_compact_int(&output, offset)?;
 							*offset += intlen;
 							call_return.ReturnValue.push(len.to_string());
@@ -903,8 +907,8 @@ mod vm_codec {
 
 	fn get_compact_int(output: &Vec<u8>, offset:&mut usize) -> Result<(usize,usize)> { 
 		let mut a: u8 = output[*offset];
-		let mut b: u8 = a >>6;
-		a &= 0b0011_1111;
+		let mut b: u8 = a & 0b0000_0011;
+		a = a>>2;
 		let val: usize;
 		
 		match b {

@@ -66,6 +66,14 @@ contract TestEvmToken is ERC20 {
 		return getResultBalance(result);
 	}
 	
+	function evmCallWasmProxy(string memory callData) public returns (string memory) {
+		return _callWasmC(callData);
+	}
+	
+	function echo(string memory p,  uint[] memory u) public returns (string memory, uint[] memory) {
+		return (p, u);
+	}
+	
 	function _bytes32tohex(bytes32 b) internal pure returns (string memory) {
 		bytes memory bytesString = new bytes(64);
 		for (uint i = 0; i< b.length; i++) {

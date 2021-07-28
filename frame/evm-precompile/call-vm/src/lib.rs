@@ -40,7 +40,10 @@ impl<T> Precompile for CallVm<T> where
 		
 		match T::call_vm4evm(Some(origin).into(), input.iter().cloned().collect(), target_gas) {
 			Ok(ret) => Ok(PrecompileOutput{exit_status:ExitSucceed::Returned, cost:ret.1, output:ret.0, logs:Vec::new()}),
-			Err(_) => Err(ExitError::Other("call wasmc execution failed".into())),		
+			Err(e) => {
+				let errstr:&'static str = e.into();
+				Err(ExitError::Other(errstr.into()))	 //Err(ExitError::Other("call wasmc execution failed".into())),
+			},
 		}		
 	}
 }
