@@ -1036,3 +1036,268 @@ fn test_evm_call_wasm_balance(){
 	});
 }
 
+// Perform test for wasm contract calling  EVM echo contract, testing parameters of different data types.
+#[test]
+fn test_wasm_call_evm_echo(){
+	let mut data = [0u8; 32];
+	data[0..20].copy_from_slice(&[1u8; 20]);
+	let ALICE: AccountId32 = AccountId32::new(data.clone());
+	data[0..20].copy_from_slice(&[2u8; 20]);
+	let BOB: AccountId32 = AccountId32::new(data);
+	// 1.  Get wasm and evm contract bin
+	let (wasm, wasm_code_hash) = contract_module::<Test>("erc20.wasm", true).unwrap();
+	let (evm, _evm_code_hash) = contract_module::<Test>("erc20_evm_bytecode.txt", false).unwrap();
+	
+	ExtBuilder::default()
+	.existential_deposit(100)
+	.build()
+	.execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 10_000_000_000_000);
+		let subsistence = Contracts::subsistence_threshold();
+		
+		// 2. Create wasm contract
+		let mut a: [u8; 4] = Default::default();
+		a.copy_from_slice(&BlakeTwo256::hash(b"new")[0..4]);		
+		let new_call = ExecutionInput::new( Selector::new(a) );
+	
+		let init_supply: <Test as pallet_balances::Config>::Balance  = 100_000_000_000_000_000_000_000;
+		let new_call = new_call.push_arg(init_supply);
+		let creation = Contracts::instantiate_with_code(
+			Origin::signed(ALICE.clone()),
+			subsistence * 10_000_000,
+			GAS_LIMIT,
+			wasm,
+			new_call.encode(),
+			vec![],
+		);
+		
+		assert_ok!(creation);
+		let wasm_addr = Contracts::contract_address(&ALICE, &wasm_code_hash, &[]);
+
+		assert!(ContractInfoOf::<Test>::contains_key(&wasm_addr));	
+		
+		//3. Create EVM contract  
+		let source = H160::from_slice(&(AsRef::<[u8; 32]>::as_ref(&ALICE)[0..20]));
+		
+		let creation4evm = <Test as pallet_evm::Config>::Runner::create(   
+			source,
+			evm,
+			U256::default(),
+			100_000_000_000,
+			Some(U256::default()),
+			Some(U256::from(0)),
+			<Test as pallet_evm::Config>::config(),
+		);
+		
+		assert_ok!(&creation4evm);
+		
+		let evm_addr: H160;
+		
+		match creation4evm.unwrap() {
+			CreateInfo {
+				exit_reason: ExitReason::Succeed(_),
+				value: create_address,
+				..
+			} => {
+				evm_addr = create_address;
+			},
+			CreateInfo {
+				exit_reason: reason,
+				value: _,
+				..
+			} => {
+				panic!("Create EVM Contract failed!({:?})", reason);
+			},
+		}
+		
+		//4.  Call wasm contract to call evm using  parameters of different data types.
+		let mut a: [u8; 4] = Default::default();
+		a.copy_from_slice(&BlakeTwo256::hash(b"wasmCallEvmProxy")[0..4]);
+		let call = ExecutionInput::new(Selector::new(a));
+		let call_para = [
+				r#"{"VM":"evm", "Account":""#, 
+				&format!("0x{:x}", evm_addr), 
+				r#"","Fun":"echo(string,uint256[])","InputType":["string","uint[]"],"InputValue":["#,
+				r#""test string!","3","231","19","6"],"OutputType":[["string","uint[]"]]}"#
+			].concat();
+		let call = call.push_arg(call_para);
+		
+		let result = Contracts::bare_call(
+				ALICE, 
+				wasm_addr,
+				0,
+				GAS_LIMIT,
+				Encode::encode(&call).to_vec(),
+			).exec_result.unwrap();
+		println!("call wasmCallEvmProxy result:{:?}", result);	
+		assert!(result.is_success());
+		assert!(result.data[0] == 0u8);
+		
+		let echo_result = <String as Decode>::decode(&mut &result.data[1..]).unwrap();
+		println!("Evm echo return:{:?}", echo_result);
+		let call_return: CallReturn = serde_json::from_slice(echo_result.as_bytes()).unwrap();
+		let echo_string = (call_return.ReturnValue[0]).parse::<String>().unwrap();
+		let mut echo_arr = [0usize; 100];
+		let echo_arr_len = (call_return.ReturnValue[1]).parse::<usize>().unwrap();
+		let mut i: usize = 0;
+		while i< echo_arr_len {
+			echo_arr[i] = (call_return.ReturnValue[2+i]).parse::<usize>().unwrap();
+			i += 1;
+		}
+		println!("array:{:?}", echo_arr);
+		//5. Test  whether the evm echo result is correct 
+		assert_eq!(&echo_string, "test string!");
+		assert_eq!(echo_arr[0..echo_arr_len], [231usize, 19usize, 6usize][..]);
+		
+	});
+}
+
+
+// Perform test for EVM contract calling  wasm echo contract, testing parameters of different data types.
+#[test]
+fn test_evm_call_wasm_echo(){
+	let mut data = [0u8; 32];
+	data[0..20].copy_from_slice(&[1u8; 20]);
+	let ALICE: AccountId32 = AccountId32::new(data.clone());
+	data[0..20].copy_from_slice(&[2u8; 20]);
+	let BOB: AccountId32 = AccountId32::new(data);
+	// 1.  Get wasm and evm contract bin
+	let (wasm, wasm_code_hash) = contract_module::<Test>("erc20.wasm", true).unwrap();
+	let (evm, _evm_code_hash) = contract_module::<Test>("erc20_evm_bytecode.txt", false).unwrap();
+	
+	ExtBuilder::default()
+	.existential_deposit(100)
+	.build()
+	.execute_with(|| {
+		let _ = Balances::deposit_creating(&ALICE, 10_000_000_000_000);
+		let subsistence = Contracts::subsistence_threshold();
+
+		// 2. Create wasm contract
+		let mut a: [u8; 4] = Default::default();
+		a.copy_from_slice(&BlakeTwo256::hash(b"new")[0..4]);		
+		let new_call = ExecutionInput::new( Selector::new(a) );
+	
+		let init_supply: <Test as pallet_balances::Config>::Balance  = 100_000_000_000_000_000_000_000;
+		let new_call = new_call.push_arg(init_supply);
+		let creation = Contracts::instantiate_with_code(
+			Origin::signed(ALICE.clone()),
+			subsistence  * 10_000_000,
+			GAS_LIMIT,
+			wasm,
+			new_call.encode(),
+			vec![],
+		);
+		let wasm_addr = Contracts::contract_address(&ALICE, &wasm_code_hash, &[]);
+
+		assert_ok!(creation);
+		assert!(ContractInfoOf::<Test>::contains_key(&wasm_addr));	
+		
+		//3. Create EVM contract
+		let source = H160::from_slice(&(AsRef::<[u8; 32]>::as_ref(&ALICE)[0..20]));
+		
+		let creation4evm = <Test as pallet_evm::Config>::Runner::create(
+			//Origin::signed(ALICE),
+			source,
+			evm,
+			U256::default(),
+			100_000_000,
+			Some(U256::default()),
+			Some(U256::from(0)),
+			<Test as pallet_evm::Config>::config(),
+		);
+		
+		assert_ok!(&creation4evm);
+		
+		let evm_addr: H160;
+		match creation4evm.unwrap() {
+			CreateInfo {
+				exit_reason: ExitReason::Succeed(_),
+				value: create_address,
+				..
+			} => {
+				evm_addr = create_address;
+			},
+			CreateInfo {
+				exit_reason: reason,
+				value: _,
+				..
+			} => {
+				panic!("Create EVM Contract failed!({:?})", reason);
+			},
+		}
+		
+		//4.  Call evm contract to call wasm  using  parameters of different data types.
+		let evm_call_wasm_selector = &Keccak256::digest(b"evmCallWasmProxy(string)")[0..4];
+		
+		let wasm_contract: [u8; 32] = wasm_addr.clone().into();
+		
+		let call_para = [
+				r#"{"VM":"wasm", "Account":"0x"#, 
+				&hex::encode(wasm_contract), 
+				r#"","Fun":"echo","InputType":["string","vec","u8","u8","u8"],"InputValue":["#,
+				r#""test string!","3","231","19","6"],"OutputType":[["string","vec"],["2"],["u8"]]}"#
+			].concat();		
+		let call_para_len: u128 = call_para.len() as u128;
+				
+		let evm_call_wasm_input = [&evm_call_wasm_selector[..], &[0u8; 31], &[32u8], &[0u8; 16], &call_para_len.to_be_bytes(), call_para.as_bytes()].concat();
+		
+		let source_alice = H160::from_slice(&(AsRef::<[u8; 32]>::as_ref(&ALICE)[0..20]));
+		
+		let call4evm = <Test as pallet_evm::Config>::Runner::call(
+				source_alice,
+				evm_addr,
+				evm_call_wasm_input,
+				U256::default(),
+				100_000_000_000,
+				Some(U256::default()),
+				Some(U256::from(1)),
+				<Test as pallet_evm::Config>::config(),
+			);
+		assert_ok!(&call4evm);
+						
+		println!("call evmCallWasmProxy reuslt:{:?}", call4evm);
+		
+		let echo_result: String;
+		match call4evm.unwrap() {
+			CallInfo {
+				exit_reason: ExitReason::Succeed(_),
+				value: return_value,
+				..
+			} => {
+				let mut output_value: [u8; 16] = Default::default();
+				let mut out_value: [u8; 16] = Default::default();
+				output_value.copy_from_slice(&return_value[16..32]);
+				let uintdata = u128::from_be_bytes(output_value) as usize;
+				out_value.copy_from_slice(&return_value[uintdata+16..uintdata+32]);
+				
+				let datalen = u128::from_be_bytes(out_value) as usize;							
+				let data = &return_value[uintdata+32..uintdata+32+datalen];
+				echo_result = String::from_utf8(data.to_vec()).unwrap();				
+			},
+			CallInfo {
+				exit_reason: reason,
+				value: _,
+				..			
+			} => {
+				panic!("Call EVM Contract fun evmCallWasmBalance failed!({:?})", reason);
+			},
+		};		
+		
+		println!("Wasm echo return:{:?}", echo_result);
+		let call_return: CallReturn = serde_json::from_slice(echo_result.as_bytes()).unwrap();
+		let echo_string = (call_return.ReturnValue[0]).parse::<String>().unwrap();
+		let mut echo_arr = [0usize; 100];
+		let echo_arr_len = (call_return.ReturnValue[1]).parse::<usize>().unwrap();
+		let mut i: usize = 0;
+		while i< echo_arr_len {
+			echo_arr[i] = (call_return.ReturnValue[2+i]).parse::<usize>().unwrap();
+			i += 1;
+		}
+		println!("array:{:?}", echo_arr);
+		//5. Test  whether the wasm echo result is correct 
+		assert_eq!(&echo_string, "test string!");
+		assert_eq!(echo_arr[0..echo_arr_len], [231usize, 19usize, 6usize][..]);		
+		
+	});
+}
+

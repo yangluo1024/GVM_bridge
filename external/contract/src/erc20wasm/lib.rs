@@ -20,6 +20,7 @@ use ink_env::Environment;
 use ink_lang as ink;
 use ink_prelude::string::String;
 
+
 #[ink::chain_extension]
 pub trait MyChainExtension {
         type ErrorCode = i32;
@@ -58,7 +59,7 @@ mod erc20 {
     };
     use ink_prelude::string::String;
     use ink_prelude::string::ToString;
-
+	use ink_prelude::vec::Vec;
 
     /// A simple ERC-20 contract.
     #[ink(storage)]
@@ -297,7 +298,25 @@ mod erc20 {
 				Err(e) => return Err(Error::OtherError(e.to_string())),
 			}
             Ok(result)
-        }		
+        }	
+
+		// Test call EVM contract from this contract
+		#[ink(message)]
+        pub fn wasmCallEvmProxy(
+            &mut self,
+            data: String,
+        ) -> Result<String> {
+            Ok(self.env().extension().call_evm_extension(&data))
+        }	
+
+		#[ink(message)]
+        pub fn echo(
+			&mut self,
+			p: String,
+			u: Vec<u8>,
+		) -> (String, Vec<u8>) {
+			(p, u))
+		}
     }
 
     /// Unit tests.
