@@ -61,8 +61,16 @@ Follow the steps below to get started with GVM Bridge.
 To start working with GVM Bridge you'll need to install [rustup](https://www.rustup.rs/), and install toolchain nightly-2021-03-01. If using x86_64 linux, you can do:
 
 ```sh
- rustup install nightly-2021-03-01
- rustup target add wasm32-unknown-unknown --toolchain nightly-2021-03-01-x86_64-unknown-linux-gnu
+rustup install nightly-2021-03-01
+rustup target add wasm32-unknown-unknown --toolchain nightly-2021-03-01-x86_64-unknown-linux-gnu
+```
+
+#### **Download the source code**
+Use git `git clone` command to download GVM Bridge source code:
+
+```sh
+git clone https://github.com/CycanTech/GVM-Bridge.git
+cd GVM-Bridge
 ```
 
 #### **Build**
