@@ -268,9 +268,10 @@ impl pallet_contracts::Config for Test {
 	type DeletionWeightLimit = DeletionWeightLimit;
 	type MaxCodeSize = MaxCodeSize;
 }
-
-//pub const ALICE: AccountId32 = AccountId32::new([1u8; 32]);
-//pub const BOB: AccountId32 = AccountId32::new([2u8; 32]);
+const A:[u8; 32] = [1,1,1,1,1, 1,1,1,1,1, 1,1,1,1,1, 1,1,1,1,1, 0,0,0,0,0, 0,0,0,0,0, 0,0];
+const B:[u8; 32] = [2,2,2,2,2, 2,2,2,2,2, 2,2,2,2,2, 2,2,2,2,2, 0,0,0,0,0, 0,0,0,0,0, 0,0];
+pub const ALICE: AccountId32 = AccountId32::new(A);
+pub const BOB: AccountId32 = AccountId32::new(B);
 //pub const CHARLIE: AccountId32 = AccountId32::new([3u8; 32]);
 //pub const DJANGO: AccountId32 = AccountId32::new([4u8; 32]);
 
@@ -319,7 +320,7 @@ impl ExtBuilder {
 /// with it's hash.
 ///
 /// The fixture files are located under the `fixtures/` directory.
-fn compile_module<T>(
+fn _compile_module<T>(
 	fixture_name: &str,
 ) -> wat::Result<(Vec<u8>, <T::Hashing as Hash>::Output)>
 where
@@ -340,7 +341,7 @@ fn read_a_file(filename: &str) -> std::io::Result<Vec<u8>> {
     let mut file = File::open(filename)?;
 
     let mut data = Vec::new();
-    let len = file.read_to_end(&mut data)?;
+    file.read_to_end(&mut data)?;
 
     return Ok(data);
 }
@@ -370,11 +371,7 @@ where
 // Perform test for wasm contract  calling  EVM contract to transfer EVM ERC20 token
 #[test]
 fn test_wasm_call_evm(){
-	let mut data = [0u8; 32];
-	data[0..20].copy_from_slice(&[1u8; 20]);
-	let ALICE: AccountId32 = AccountId32::new(data.clone());
-	data[0..20].copy_from_slice(&[2u8; 20]);
-	let BOB: AccountId32 = AccountId32::new(data);
+
 	// 1.  Get wasm and evm contract bin
 	let (wasm, wasm_code_hash) = contract_module::<Test>("erc20.wasm", true).unwrap();
 	let (evm, _evm_code_hash) = contract_module::<Test>("erc20_evm_bytecode.txt", false).unwrap();
@@ -483,6 +480,7 @@ fn test_wasm_call_evm(){
 				panic!("Call EVM Contract balanceOf failed!({:?})", reason);
 			},
 		};
+		println!("Alice transfer to Bob token:{}", transfer_result);
 		
 		//4. Get BOB balance of EVM token
 		let balance_of_selector = &Keccak256::digest(b"balanceOf(address)")[0..4];
@@ -590,11 +588,7 @@ fn test_wasm_call_evm(){
 // Perform test for EVM contract  calling  wasm contract to transfer wasm ERC20 token
 #[test]
 fn test_evm_call_wasm(){
-	let mut data = [0u8; 32];
-	data[0..20].copy_from_slice(&[1u8; 20]);
-	let ALICE: AccountId32 = AccountId32::new(data.clone());
-	data[0..20].copy_from_slice(&[2u8; 20]);
-	let BOB: AccountId32 = AccountId32::new(data);
+
 	// 1.  Get wasm and evm contract bin
 	let (wasm, wasm_code_hash) = contract_module::<Test>("erc20.wasm", true).unwrap();
 	let (evm, _evm_code_hash) = contract_module::<Test>("erc20_evm_bytecode.txt", false).unwrap();
@@ -683,8 +677,6 @@ fn test_evm_call_wasm(){
 		a.copy_from_slice(&BlakeTwo256::hash(b"balance_of")[0..4]);		
 		let balance_of_call = ExecutionInput::new( Selector::new(a) );
 		
-		let source_bob = H160::from_slice(&(AsRef::<[u8; 32]>::as_ref(&BOB)[0..20]));
-				
 		let balance_of_call = balance_of_call.push_arg(&BOB);
 						
 		let result = Contracts::bare_call(
@@ -703,7 +695,7 @@ fn test_evm_call_wasm(){
 				
 		//5.  Call EVM contract to call wasm contract transfer wasm token to bob,  the last bytes32 is the wasm contract accountid
 		let evm_call_wasm_selector = &Keccak256::digest(b"evmCallWasm(bytes32,uint256,bytes32)")[0..4];
-		let fun_para: [u8; 20] = source_bob.into();
+
 		let transfer_value: u128  = 12000000000000000000;
 		
 		let wasm_contract: [u8; 32] = wasm_addr.clone().into();
@@ -749,11 +741,7 @@ fn test_evm_call_wasm(){
 // Perform test for wasm contract calling  EVM contract to get bob's EVM ERC20 token balance
 #[test]
 fn test_wasm_call_evm_balance(){
-	let mut data = [0u8; 32];
-	data[0..20].copy_from_slice(&[1u8; 20]);
-	let ALICE: AccountId32 = AccountId32::new(data.clone());
-	data[0..20].copy_from_slice(&[2u8; 20]);
-	let BOB: AccountId32 = AccountId32::new(data);
+
 	// 1.  Get wasm and evm contract bin
 	let (wasm, wasm_code_hash) = contract_module::<Test>("erc20.wasm", true).unwrap();
 	let (evm, _evm_code_hash) = contract_module::<Test>("erc20_evm_bytecode.txt", false).unwrap();
@@ -863,7 +851,7 @@ fn test_wasm_call_evm_balance(){
 			},
 		};
 		
-		println!("Alice transfer to Bob evm token:{}", token);
+		println!("Alice transfer to Bob evm result:{}, tokens:{}", transfer_result, token);
 
 		//4.  Call wasm contract to call evm for getting BOB balance of EVM token.  H160: evm contract address, H160: BOB's address  
 		let mut a: [u8; 4] = Default::default();
@@ -896,11 +884,7 @@ fn test_wasm_call_evm_balance(){
 // Perform test for EVM contract  calling  wasm contract to get bob's wasm ERC20 token balance
 #[test]
 fn test_evm_call_wasm_balance(){
-	let mut data = [0u8; 32];
-	data[0..20].copy_from_slice(&[1u8; 20]);
-	let ALICE: AccountId32 = AccountId32::new(data.clone());
-	data[0..20].copy_from_slice(&[2u8; 20]);
-	let BOB: AccountId32 = AccountId32::new(data);
+
 	// 1.  Get wasm and evm contract bin
 	let (wasm, wasm_code_hash) = contract_module::<Test>("erc20.wasm", true).unwrap();
 	let (evm, _evm_code_hash) = contract_module::<Test>("erc20_evm_bytecode.txt", false).unwrap();
@@ -1039,11 +1023,7 @@ fn test_evm_call_wasm_balance(){
 // Perform test for wasm contract calling  EVM echo contract, testing parameters of different data types.
 #[test]
 fn test_wasm_call_evm_echo(){
-	let mut data = [0u8; 32];
-	data[0..20].copy_from_slice(&[1u8; 20]);
-	let ALICE: AccountId32 = AccountId32::new(data.clone());
-	data[0..20].copy_from_slice(&[2u8; 20]);
-	let BOB: AccountId32 = AccountId32::new(data);
+
 	// 1.  Get wasm and evm contract bin
 	let (wasm, wasm_code_hash) = contract_module::<Test>("erc20.wasm", true).unwrap();
 	let (evm, _evm_code_hash) = contract_module::<Test>("erc20_evm_bytecode.txt", false).unwrap();
@@ -1156,11 +1136,7 @@ fn test_wasm_call_evm_echo(){
 // Perform test for EVM contract calling  wasm echo contract, testing parameters of different data types.
 #[test]
 fn test_evm_call_wasm_echo(){
-	let mut data = [0u8; 32];
-	data[0..20].copy_from_slice(&[1u8; 20]);
-	let ALICE: AccountId32 = AccountId32::new(data.clone());
-	data[0..20].copy_from_slice(&[2u8; 20]);
-	let BOB: AccountId32 = AccountId32::new(data);
+
 	// 1.  Get wasm and evm contract bin
 	let (wasm, wasm_code_hash) = contract_module::<Test>("erc20.wasm", true).unwrap();
 	let (evm, _evm_code_hash) = contract_module::<Test>("erc20_evm_bytecode.txt", false).unwrap();
