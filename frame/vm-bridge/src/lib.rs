@@ -284,17 +284,7 @@ pub mod pallet {
 					}
 				},
 				Err(e) => {
-					let err_str: &str;
-					match e {
-							BalanceLow => err_str = "Call EVM BalanceLow",
-							FeeOverflow => err_str = "Call EVM FeeOverflow",
-							PaymentOverflow => err_str = "Call EVM PaymentOverflow",
-							WithdrawFailed => err_str = "Call EVM WithdrawFailed ",
-							GasPriceTooLow => err_str = "Call EVM GasPriceTooLow ",
-							InvalidNonce => err_str = "Call EVM InvalidNonce ",
-							_ => err_str = "Call EVM OtherError. ",
-					}		
-					return Err(DispatchError::from(err_str));
+					return Err(e.into());
 				},
 			}
 			
