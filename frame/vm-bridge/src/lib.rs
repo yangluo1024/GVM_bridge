@@ -81,9 +81,11 @@ pub mod pallet {
 		type Call: From<Call<Self>>;
 
 		type Currency: Currency<Self::AccountId>;
-
+		
+		#[pallet::constant]
 		type Enable2EVM: Get<bool>;
-
+		
+		#[pallet::constant]
 		type Enable2WasmC: Get<bool>;
 		
 	}
@@ -180,6 +182,9 @@ pub mod pallet {
 			data: Vec<u8>,
 			target_gas: Option<u64>
 		) -> Result<(Vec<u8>, u64)> {
+			if !T::Enable2WasmC::get() {
+				return Err(DispatchError::from("Enable2WasmC is false, can't call wasm contract."));
+			}
 			
 			let input: Vec<u8>;
 			let target: AccountId32;
@@ -236,6 +241,10 @@ pub mod pallet {
 			E: Ext<T = C>,
 			<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 		{
+			if !C::Enable2EVM::get() {
+				return Err(DispatchError::from("Enable2EVM is false, can't call evm."));
+			}
+			
 			let mut source_arr = [0u8; 32];
 			source_arr[0..32].copy_from_slice(env.ext().caller().as_byte_slice());
 			let source = H160::from_slice(&source_arr[0..20]);
