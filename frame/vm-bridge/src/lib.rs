@@ -25,12 +25,11 @@ use pallet_evm::Runner;
 use fp_evm::ExecutionInfo;
 use frame_support::sp_runtime::AccountId32;
 use byte_slice_cast::AsByteSlice;
-use std::error::Error;
 use frame_support::dispatch::DispatchError;
 pub use pallet::*;
 	
-type Result<T> = std::result::Result<T, DispatchError>;
-type ResultBox<T> = std::result::Result<T, Box<dyn Error>>;
+type Result<T> = sp_std::result::Result<T, DispatchError>;
+type ResultBox<T> = sp_std::result::Result<T, CustomError>;
 
 
 #[cfg(test)]
@@ -313,8 +312,17 @@ pub mod pallet {
 	}
 }	
 
+macro_rules! t { 
+	($a:expr) => (
+		match $a { 
+			Ok(v) => v, 
+			Err(e) => return Err(CustomError::new(&e.to_string())), 
+		}
+	); 
+}
+
 #[derive(Debug)]
-struct CustomError {
+pub struct CustomError {
 	detail: String,
 }
 
@@ -330,23 +338,21 @@ impl fmt::Display for CustomError {
     }
 }
 
-impl Error for CustomError {}
+//impl Error for CustomError {}
 
 
 mod vm_codec {
 	use crate::{H160, CallVM, CallReturn, CustomError};
+	
 	use sp_runtime::{AccountId32, traits::{BlakeTwo256, Hash}};
-	use std::error::Error;			
 	use codec::Compact;
 	use core::mem::size_of;
 	use sha3::{Digest, Keccak256};
-	//use sp_core::keccak::KeccakHasher;
-	use std::convert::TryInto;
-	//use std::convert::TryFrom;
-	use std::str::FromStr;
+	use sp_std::convert::TryInto;
+	use sp_std::str::FromStr;
 	use codec::Encode;
 	
-	type Result<T> = std::result::Result<T, Box<dyn Error>>;
+	type Result<T> = sp_std::result::Result<T, CustomError>;
 	
 	macro_rules! bytes_encode{
 		($bytesdata:ident, $offset:ident, $value_data:ident, $data_ex:ident)=>(
@@ -375,7 +381,7 @@ mod vm_codec {
 					$value_data.extend_from_slice(&[0u8;16]);
 					$value_data.extend_from_slice(&hexdata);
 				
-					$datalen = $value.parse::<u128>()?;
+					$datalen = t!($value.parse::<u128>());
 					let hexdatalen = $datalen.to_be_bytes();
 					$data_ex.extend_from_slice(&[0u8;16]);
 					$data_ex.extend_from_slice(&hexdatalen);
@@ -383,9 +389,9 @@ mod vm_codec {
 	}
 	
 	pub fn evm_encode(input: &Vec<u8>) -> Result<(Vec<u8>, H160)>{
-		let call_vm: CallVM = serde_json::from_slice(input.as_slice())?;
+		let call_vm: CallVM = t!(serde_json::from_slice(input.as_slice()));
 		let account = call_vm.Account;
-		let target = H160::from_str(&account)?;
+		let target = t!(H160::from_str(&account));
 	
 		let selector = &Keccak256::digest(call_vm.Fun.as_bytes())[0..4];
 		let mut offset: u128 = (call_vm.InputType.len() * 32).try_into().unwrap_or_default();
@@ -402,18 +408,18 @@ mod vm_codec {
 			let mut value_data: Vec<u8> = Vec::new();
 			match p.as_ref() {
 				"address" => {
-					let addrdata = hex::decode(&value[2..])?;  //drop off the first two bytes "0x"
+					let addrdata = t!(hex::decode(&value[2..]));  //drop off the first two bytes "0x"
 					value_data.extend_from_slice(&[0u8;12]);
 					value_data.extend_from_slice(&addrdata[0..20]);
 				},
 				"uint" => {
-					let uintdata = value.parse::<u128>()?;
+					let uintdata = t!(value.parse::<u128>());
 					let hexdata = uintdata.to_be_bytes();
 					value_data.extend_from_slice(&[0u8;16]);
 					value_data.extend_from_slice(&hexdata); 
 				},
 				"int" => {
-					let intdata = value.parse::<i128>()?;
+					let intdata = t!(value.parse::<i128>());
 					let hexdata = intdata.to_be_bytes();
 					if intdata < 0 {
 						value_data.extend_from_slice(&[255u8;16]);
@@ -423,7 +429,7 @@ mod vm_codec {
 					value_data.extend_from_slice(&hexdata);
 				},
 				"bytes?" => {
-					let hexdata = hex::decode(value)?;
+					let hexdata = t!(hex::decode(value));
 					value_data.extend_from_slice(&hexdata);
 					value_data.append(&mut vec![0u8;32-hexdata.len()]);
 				},
@@ -442,7 +448,7 @@ mod vm_codec {
 					bytes_encode!(bytesdata, offset, value_data, data_ex);
 				},
 				"bytes" => {
-					let bytesdata = hex::decode(value)?;
+					let bytesdata = t!(hex::decode(value));
 					bytes_encode!(bytesdata, offset, value_data, data_ex);
 				},
 				"address[]" => {
@@ -452,7 +458,7 @@ mod vm_codec {
 					while j<datalen {
 						i = i + 1;
 						let value = call_vm.InputValue.get(i).ok_or(CustomError::new("Data number is error."))?;
-						let addrdata = hex::decode(&value[2..])?;  //get off the first two bytes "0x"
+						let addrdata = t!(hex::decode(&value[2..]));  //get off the first two bytes "0x"
 						data_ex.extend_from_slice(&[0u8;12]);
 						data_ex.extend_from_slice(&addrdata[0..20]);
 						j += 1
@@ -466,7 +472,7 @@ mod vm_codec {
 					while j<datalen {
 						i = i + 1;
 						let value = call_vm.InputValue.get(i).ok_or(CustomError::new("Data number is error."))?;
-						let uintdata = value.parse::<u128>()?;
+						let uintdata = t!(value.parse::<u128>());
 						let hexdata = uintdata.to_be_bytes();
 						data_ex.extend_from_slice(&[0u8;16]);
 						data_ex.extend_from_slice(&hexdata);					
@@ -481,7 +487,7 @@ mod vm_codec {
 					while j<datalen {
 						i = i + 1;
 						let value = call_vm.InputValue.get(i).ok_or(CustomError::new("Data number is error."))?;
-						let intdata = value.parse::<i128>()?;
+						let intdata = t!(value.parse::<i128>());
 						let hexdata = intdata.to_be_bytes();
 						if intdata < 0 {
 							data_ex.extend_from_slice(&[255u8;16]);
@@ -500,7 +506,7 @@ mod vm_codec {
 					while j<datalen {
 						i = i + 1;
 						let value = call_vm.InputValue.get(i).ok_or(CustomError::new("Data number is error."))?;
-						let hexdata = hex::decode(value)?;
+						let hexdata = t!(hex::decode(value));
 						data_ex.extend_from_slice(&hexdata);
 						data_ex.append(&mut vec![0u8;32-hexdata.len()]);
 						j += 1
@@ -557,7 +563,7 @@ mod vm_codec {
 	    
 		match succ {
 			true => {
-				let call_vm: CallVM = serde_json::from_slice(input.as_slice())?;
+				let call_vm: CallVM = t!(serde_json::from_slice(input.as_slice()));
 			
 				call_return.Result = 0;
 				call_return.Message = String::from(mesg);
@@ -605,7 +611,7 @@ mod vm_codec {
 							out_value.copy_from_slice(&output[uintdata+16..uintdata+32]);
 							let datalen = u128::from_be_bytes(out_value) as usize;							
 							let data = &output[uintdata+32..uintdata+32+datalen];
-							let data_str = String::from_utf8(data.to_vec())?;
+							let data_str = t!(String::from_utf8(data.to_vec()));
 							
 							call_return.ReturnValue.push(data_str);
 						},
@@ -693,16 +699,16 @@ mod vm_codec {
 			}
 		}
 		
-		let return_json = serde_json::to_string(&call_return)?;
+		let return_json = t!(serde_json::to_string(&call_return));
 		Ok(String::encode(&return_json))
 	}
 
 
 
 	pub fn wasm_encode(input: &Vec<u8>) -> Result<(Vec<u8>, AccountId32)>{
-		let call_vm: CallVM = serde_json::from_slice(input.as_slice())?;	
+		let call_vm: CallVM = t!(serde_json::from_slice(input.as_slice()));	
 		let account = call_vm.Account;
-		let target = AccountId32::from_str(&account)?;
+		let target = t!(AccountId32::from_str(&account));
 	
 		let selector = &BlakeTwo256::hash(call_vm.Fun.as_bytes())[0..4];
 		let mut data: Vec<u8> = Vec::new();
@@ -737,11 +743,11 @@ mod vm_codec {
 				},
 				"string" => value_data.append(&mut String::encode(value)),
 				"vec" => {
-					let val = value.parse::<u64>()?;
+					let val = t!(value.parse::<u64>());
 					value_data.append(&mut Compact(val).encode());
 				},
 				"accountid" => {
-					let mut data1 = hex::decode(&value[2..])?;
+					let mut data1 = t!(hex::decode(&value[2..]));
 					value_data.append(&mut data1);
 				}
 				_ => (),
@@ -780,7 +786,7 @@ mod vm_codec {
 	    
 		match succ {
 			true => {
-				let call_vm: CallVM = serde_json::from_slice(input.as_slice())?;
+				let call_vm: CallVM = t!(serde_json::from_slice(input.as_slice()));
 				
 				call_return.Result = 0;
 				call_return.Message = String::from(mesg);
@@ -795,9 +801,9 @@ mod vm_codec {
 			}
 		}
 		
-		let return_json = serde_json::to_string(&call_return)?;
+		let return_json = t!(serde_json::to_string(&call_return));
 		let return_bytes = return_json.into_bytes();
-		let return_bytes_len:u128 = return_bytes.len().try_into()?;
+		let return_bytes_len:u128 = t!(return_bytes.len().try_into());
 		let return_result = [&[0u8; 16][..], &return_bytes_len.to_be_bytes(), &return_bytes].concat();
 		Ok(return_result)
 	}
@@ -824,12 +830,12 @@ mod vm_codec {
 						"char" => {
 							let width = 4 ;  //size_of::<char>();
 							*offset += width;
-							let a = String::from_utf8(output[*offset-width..*offset].to_vec())?;							
+							let a = t!(String::from_utf8(output[*offset-width..*offset].to_vec()));							
 							call_return.ReturnValue.push(a);
 						},
 						"string" => {   //Not support len>2**30-1 string
 							let (intlen,len) = get_compact_int(&output, offset)?;
-							let str_value = String::from_utf8(output[*offset+intlen..*offset+intlen+len].to_vec())?;
+							let str_value = t!(String::from_utf8(output[*offset+intlen..*offset+intlen+len].to_vec()));
 							*offset += intlen + len;
 							call_return.ReturnValue.push(str_value);
 						},
@@ -846,7 +852,7 @@ mod vm_codec {
 							
 							let type_index = output_type.get(index+1).ok_or(CustomError::new("OutputType number error"))?;
 							let type_index = type_index.get(i).ok_or(CustomError::new("OutputType number error"))?;
-							let type_index = type_index.parse::<usize>()?;
+							let type_index = t!(type_index.parse::<usize>());
 							i = i + 1;
 							
 							if type_index > 0 {
@@ -864,12 +870,12 @@ mod vm_codec {
 							
 							let type_index = output_type.get(index+1).ok_or(CustomError::new("OutputType number error"))?;
 							let type_index = type_index.get(i).ok_or(CustomError::new("OutputType number error"))?;
-							let type_index = type_index.parse::<usize>()?;
+							let type_index = t!(type_index.parse::<usize>());
 							i = i + 1;
 							if type_index > 0 {
 								let type_index = output_type.get(type_index).ok_or(CustomError::new("OutputType number error"))?;
 								let type_index = type_index.get(a).ok_or(CustomError::new("OutputType number error"))?;
-								let type_index = type_index.parse::<usize>()?;
+								let type_index = t!(type_index.parse::<usize>());
 								if type_index > 0 {
 									get_wasm_decode(&output_type, &output, offset, call_return, type_index)?;
 								}
@@ -896,7 +902,7 @@ mod vm_codec {
 	}	
 	impl_from_le_bytes!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128);
 	
-	fn to_string_value<T: Sized+std::fmt::Display+FromLeBytes<T>>(output: &Vec<u8>, offset:&mut usize) -> String { 
+	fn to_string_value<T: Sized+sp_std::fmt::Display+FromLeBytes<T>>(output: &Vec<u8>, offset:&mut usize) -> String { 
 		let width = size_of::<T>();
 		*offset +=  width;
 		let a: T = T::from_le_bytes(&output[*offset-width..*offset]);
@@ -920,7 +926,7 @@ mod vm_codec {
 			    let val_bytes = [a, output[*offset+1], output[*offset+2], output[*offset+3]];
 				val = u32::from_le_bytes(val_bytes) as usize;			
 			},
-			_ => return Err(Box::new(CustomError::new("Not support."))),     //ob11 not support, which up six is the bignumber length.
+			_ => return Err(CustomError::new("Not support.")),     //ob11 not support, which up six is the bignumber length.
 		}
 		
 		b = b*2;
