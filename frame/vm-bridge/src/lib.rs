@@ -7,9 +7,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(destructuring_assignment)]
 
+pub extern crate alloc;
+
+use alloc::string::String;
 use frame_support::traits::Currency;
 
 use codec::{Encode, Decode};
+use sp_std::vec;
 use sp_std::vec::Vec;
 use sp_std::{prelude::*, str,};
 use core::fmt;
@@ -342,7 +346,7 @@ impl fmt::Display for CustomError {
 
 
 mod vm_codec {
-	use crate::{H160, CallVM, CallReturn, CustomError};
+	use super::*;
 	
 	use sp_runtime::{AccountId32, traits::{BlakeTwo256, Hash}};
 	use codec::Compact;
