@@ -78,7 +78,7 @@ frame_support::construct_runtime!(
 		Randomness: pallet_randomness_collective_flip::{Module, Call, Storage},	
 		Contracts: pallet_contracts::{Module, Call, Config<T>, Storage, Event<T>},
 		EVM: pallet_evm::{Module, Call, Config, Storage, Event<T>},
-		GvmBridge: pallet_vm_bridge::{Module, Call, Config<T>, Storage, Event<T>},
+		GvmBridge: pallet_vm_bridge::{Module, Call, Storage, Event<T>},
 	}
 );
 

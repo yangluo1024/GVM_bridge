@@ -9,7 +9,7 @@
 
 pub extern crate alloc;
 
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use frame_support::traits::Currency;
 
 use codec::{Encode, Decode};
@@ -38,8 +38,6 @@ type ResultBox<T> = sp_std::result::Result<T, CustomError>;
 
 #[cfg(test)]
 mod tests;
-
-extern crate serde_json; 
 
 #[derive(Deserialize, Encode, Decode, Debug)]
 #[allow(non_snake_case)]
@@ -136,44 +134,7 @@ pub mod pallet {
 			Ok(())
 		}
 	}
-	
-	#[pallet::storage]
-	#[pallet::getter(fn id)]
-	pub(super) type Ttt<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
-	
-	#[pallet::genesis_config]
-	pub struct GenesisConfig<T: Config> 
-	where
-		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> + From<AccountId32>,
-		<<T as pallet_contracts::Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance: From<u128>,	
-	{
-		pub xttt: T::BlockNumber,
-	}
 
-	#[cfg(feature = "std")]
-	impl<T: Config> Default for GenesisConfig<T> 
-	where
-		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> + From<AccountId32>,
-		<<T as pallet_contracts::Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance: From<u128>,
-	{
-		fn default() -> Self {
-			Self {
-				xttt: Default::default(),
-			}
-		}
-	}
-
-	#[pallet::genesis_build]
-	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> 
-	where
-		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> + From<AccountId32>,
-		<<T as pallet_contracts::Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance: From<u128>,
-	{
-		fn build(&self) {
-			<Ttt<T>>::put(&self.xttt);
-		}
-	}
-	
 	impl<T: Config> Pallet<T>
 	where
 		T::AccountId: UncheckedFrom<T::Hash> + AsRef<[u8]> + From<AccountId32>,
@@ -345,7 +306,7 @@ impl fmt::Display for CustomError {
 //impl Error for CustomError {}
 
 
-mod vm_codec {
+pub mod vm_codec {
 	use super::*;
 	
 	use sp_runtime::{AccountId32, traits::{BlakeTwo256, Hash}};
@@ -708,12 +669,14 @@ mod vm_codec {
 	}
 
 
-
 	pub fn wasm_encode(input: &Vec<u8>) -> Result<(Vec<u8>, AccountId32)>{
 		let call_vm: CallVM = t!(serde_json::from_slice(input.as_slice()));	
 		let account = call_vm.Account;
-		let target = t!(AccountId32::from_str(&account));
-	
+		let mut bytes = [0u8; 32];
+		let target = t!(
+				hex::decode_to_slice(&account[2..], &mut bytes)
+						.map_err(|_| "invalid hex address.")
+						.map(|_| AccountId32::from(bytes)));
 		let selector = &BlakeTwo256::hash(call_vm.Fun.as_bytes())[0..4];
 		let mut data: Vec<u8> = Vec::new();
 		let mut i: usize = 0;
