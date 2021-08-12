@@ -28,7 +28,7 @@ pub trait EvmChainExtension<C: SysConfig> {
 impl<T> Precompile for CallVm<T> where
 	T: pallet_evm::Config + EvmChainExtension<T>,
 
-	<T as SysConfig>::Origin: From<std::option::Option<<T as SysConfig>::AccountId>>,
+	<T as SysConfig>::Origin: From<Option<<T as SysConfig>::AccountId>>,
 {
 	fn execute(
 		input: &[u8],
