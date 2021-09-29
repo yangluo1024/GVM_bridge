@@ -146,6 +146,7 @@ pub mod pallet {
 			data: Vec<u8>,
 			target_gas: Option<u64>
 		) -> Result<(Vec<u8>, u64)> {
+			log::info!("DATA ={:?}",data);
 			if !T::Enable2WasmC::get() {
 				return Err(DispatchError::from("Enable2WasmC is false, can't call wasm contract."));
 			}
@@ -166,7 +167,7 @@ pub mod pallet {
 			
 			let origin = ensure_signed(origin)?;
 			let target = T::AccountId::from(target);
-			
+			log::info!("1111111111111111111111111111111111\n");
 			let info = pallet_contracts::Pallet::<T>::bare_call(
 					origin,
 					target,
@@ -174,6 +175,7 @@ pub mod pallet {
 					gas_limit,
 					input
 				);
+			log::info!("TEST INFO = {:?}", info);
 			let output: ResultBox<Vec<u8>>;
 			match info.exec_result {
 				Ok(return_value) => {
@@ -205,6 +207,7 @@ pub mod pallet {
 			E: Ext<T = C>,
 			<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 		{
+			log::info!("=================================================================\n");
 			if !C::Enable2EVM::get() {
 				return Err(DispatchError::from("Enable2EVM is false, can't call evm."));
 			}
@@ -218,14 +221,14 @@ pub mod pallet {
 			
 			let input: Vec<u8>;
 			let target: H160;
-		
+			log::info!("==================input0 data = {:?}", input0);
 			match vm_codec::evm_encode(&input0) {		
 				Ok(r) => (input, target) = r,
 				Err(e) => {
 					return Err(DispatchError::from(str2s(e.to_string())));
 				},
 			}
-					
+			log::info!("===============WASM call Info = {:?}----{:?}",source, input);		
 			let info = <C as pallet_evm::Config>::Runner::call(
 				source, 
 				target, 

@@ -13,19 +13,19 @@ serde = { version = '1.0.125', default-features = false, features = ['derive'] }
 serde_json = { version = '1.0.64', default-features = false, features = ['alloc'] }
 lite-json = { version = "0.1", default-features = false }
 log = { version = "0.4.14", default-features = false }
-hex = { version = "0.4.3", default-features = false, features = ['alloc'] }
+hex = { version = "0.4.2", default-features = false, features = ['alloc'] }
 getrandom = { version = "0.2", features = ["js"] }
 
-frame-support = { version = "3.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier"}
-frame-system = { version = "3.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
-sp-core = { version = "3.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier"}
-sp-keystore = { version = "0.9.0", optional = true, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
-sp-io = { version = "3.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
-sp-runtime = { version = "3.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
-sp-std = { version = "3.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
-pallet-contracts = { version = "3.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
-pallet-evm = {version = "5.0.0-dev", default-features = false, git = "https://github.com/paritytech/frontier.git", rev = "955a8c0" }
-fp-evm = {version = "2.0.0", default-features = false, git = "https://github.com/paritytech/frontier.git", rev = "955a8c0" }
+frame-support = { version = "3.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier"}
+frame-system = { version = "3.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
+sp-core = { version = "3.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier"}
+sp-keystore = { optional = true, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
+sp-io = { version = "3.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
+sp-runtime = { version = "3.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
+sp-std = { version = "3.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
+pallet-contracts = { version = "3.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
+pallet-evm = {default-features = false, path = "../../../frontier/frame/evm" }
+fp-evm = {version = "2.0.0", default-features = false, path = "../../../frontier/primitives/evm" }
 byte-slice-cast= { version = "1.0.0", default-features = false }
 sha3 = { version = "0.8", default-features = false }
 blake2-rfc = { version = "0.2.18", default-features = false }
@@ -37,10 +37,10 @@ hex-literal = "0.3"
 paste = "1"
 pretty_assertions = "0.7"
 wat = "1"
-pallet-balances = { version = "3.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
-pallet-timestamp = { version = "3.0.0", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
+pallet-balances = { version = "3.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
+pallet-timestamp = { version = "3.0.0-dev", default-features = false, git = "https://github.com/paritytech/substrate.git", branch = "frontier" }
 pallet-randomness-collective-flip = { version = "3.0.0", default-features = false, path = "../../external/frame/randomness-collective-flip" }
-pallet-evm-precompile-simple = {version = "2.0.0-dev", default-features = false, git = "https://github.com/paritytech/frontier.git", rev = "955a8c0" }
+pallet-evm-precompile-simple = {version = "2.0.0-dev", default-features = false, path = "../../../frontier/frame/evm/precompile/simple" }
 pallet-evm-precompile-call-vm = { version = "0.1.0", path = "../evm-precompile/call-vm" }
 ink_env = { git = "https://github.com/paritytech/ink",  version = "3.0.0-rc3" }
 

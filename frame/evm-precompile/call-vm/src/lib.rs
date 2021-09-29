@@ -37,7 +37,7 @@ impl<T> Precompile for CallVm<T> where
 	) -> core::result::Result<PrecompileOutput, ExitError> {   //(ExitSucceed, Vec<u8>, u64)
 	
 		let origin = T::AddressMapping::into_account_id(context.caller);
-		
+		log::info!("000000000000000000---INPUT={:?}",input);
 		match T::call_vm4evm(Some(origin).into(), input.iter().cloned().collect(), target_gas) {
 			Ok(ret) => Ok(PrecompileOutput{exit_status:ExitSucceed::Returned, cost:ret.1, output:ret.0, logs:Vec::new()}),
 			Err(e) => {
