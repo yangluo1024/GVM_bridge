@@ -152,7 +152,9 @@ impl pallet_evm::Config for Test {
         type OnChargeTransaction = ();
 		type BlockGasLimit = ();
 		type BlockHashMapping = SubstrateBlockHashMapping<Self>;
+		type FindAuthor = ();
 }
+
 
 //E
 
