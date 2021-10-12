@@ -159,15 +159,18 @@ pub mod pallet {
 				Err(e) => return Err(DispatchError::from(str2s(e.to_string()))),
 			}
 					
-			let mut gas_limit:u64 = 0;
+			let mut gas_limit:u64 = 100_000_000_000;
 			match target_gas {
-				Some(t) =>  gas_limit = t,
+				Some(t) =>  {
+					if t > gas_limit {
+						gas_limit = t;
+					}
+				},
 				None => (),
 			}
 			
 			let origin = ensure_signed(origin)?;
 			let target = T::AccountId::from(target);
-			log::info!("1111111111111111111111111111111111\n");
 			let info = pallet_contracts::Pallet::<T>::bare_call(
 					origin,
 					target,
@@ -207,7 +210,6 @@ pub mod pallet {
 			E: Ext<T = C>,
 			<E::T as SysConfig>::AccountId: UncheckedFrom<<E::T as SysConfig>::Hash> + AsRef<[u8]>,
 		{
-			log::info!("=================================================================\n");
 			if !C::Enable2EVM::get() {
 				return Err(DispatchError::from("Enable2EVM is false, can't call evm."));
 			}
@@ -221,14 +223,12 @@ pub mod pallet {
 			
 			let input: Vec<u8>;
 			let target: H160;
-			log::info!("==================input0 data = {:?}", input0);
 			match vm_codec::evm_encode(&input0) {		
 				Ok(r) => (input, target) = r,
 				Err(e) => {
 					return Err(DispatchError::from(str2s(e.to_string())));
 				},
 			}
-			log::info!("===============WASM call Info = {:?}----{:?}",source, input);		
 			let info = <C as pallet_evm::Config>::Runner::call(
 				source, 
 				target, 
@@ -269,10 +269,13 @@ pub mod pallet {
 					let output = envbuf.write(&r, false, None).map_err(|_| DispatchError::from("ChainExtension failed to write result"));
 					match output {
 						Ok(_) => return Ok(RetVal::Converging(0)),
-						Err(e) => return Err(e),
+						Err(e) => {
+						return Err(e)
+						},
 					}
 				},
-				Err(e) => return Err(DispatchError::from(str2s(e.to_string()))),
+				Err(e) => {
+					return Err(DispatchError::from(str2s(e.to_string()))) },
 			}
 			
 		}
@@ -283,8 +286,12 @@ pub mod pallet {
 macro_rules! t { 
 	($a:expr) => (
 		match $a { 
-			Ok(v) => v, 
-			Err(e) => return Err(CustomError::new(&e.to_string())), 
+			Ok(v) => {
+				v
+			}, 
+			Err(e) => {
+				return Err(CustomError::new(&e.to_string()))
+			}, 
 		}
 	); 
 }
@@ -366,7 +373,6 @@ pub mod vm_codec {
 		let mut data: Vec<u8> = Vec::new();
 		let mut data_ex: Vec<u8> = Vec::new();
 		let mut i:usize = 0;
-		
 		// 256 bit for per fix parameter,  dyn parameter occupy 256bit offset value, and value add after all fix paramter
 		// dyn parameter in offset one 256bit length value, and after real value
 		// uint int using big endian, and patch 0 in high bit.  else for address byte patch 0 in low bit.
@@ -376,7 +382,7 @@ pub mod vm_codec {
 			let mut value_data: Vec<u8> = Vec::new();
 			match p.as_ref() {
 				"address" => {
-					let addrdata = t!(hex::decode(&value[2..]));  //drop off the first two bytes "0x"
+					let addrdata = t!(hex::decode(&value[0..]));  //drop off the first two bytes "0x"
 					value_data.extend_from_slice(&[0u8;12]);
 					value_data.extend_from_slice(&addrdata[0..20]);
 				},

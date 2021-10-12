@@ -113,7 +113,7 @@ impl AddressMapping<AccountId32> for CompactAddressMapping {
 pub struct FixedGasPrice;
 impl FeeCalculator for FixedGasPrice {
         fn min_gas_price() -> U256 {
-                0.into()
+                1.into()
         }
 }
 
