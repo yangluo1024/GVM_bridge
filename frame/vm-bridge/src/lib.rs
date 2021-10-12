@@ -146,7 +146,6 @@ pub mod pallet {
 			data: Vec<u8>,
 			target_gas: Option<u64>
 		) -> Result<(Vec<u8>, u64)> {
-			log::info!("DATA ={:?}",data);
 			if !T::Enable2WasmC::get() {
 				return Err(DispatchError::from("Enable2WasmC is false, can't call wasm contract."));
 			}
@@ -178,7 +177,6 @@ pub mod pallet {
 					gas_limit,
 					input
 				);
-			log::info!("TEST INFO = {:?}", info);
 			let output: ResultBox<Vec<u8>>;
 			match info.exec_result {
 				Ok(return_value) => {
@@ -382,9 +380,14 @@ pub mod vm_codec {
 			let mut value_data: Vec<u8> = Vec::new();
 			match p.as_ref() {
 				"address" => {
-					let addrdata = t!(hex::decode(&value[0..]));  //drop off the first two bytes "0x"
+					let mut _addrdata: Vec<u8> = Vec::new();
+					if &value[0..2] == "0x" {
+						_addrdata = t!(hex::decode(&value[2..]));
+					}else{
+						_addrdata = t!(hex::decode(&value[0..]));  //drop off the first two bytes "0x"
+					}
 					value_data.extend_from_slice(&[0u8;12]);
-					value_data.extend_from_slice(&addrdata[0..20]);
+					value_data.extend_from_slice(&_addrdata[0..20]);
 				},
 				"uint" => {
 					let uintdata = t!(value.parse::<u128>());
