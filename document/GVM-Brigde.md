@@ -7,7 +7,7 @@
 使用frontier中的template作为项目模板使用。
 
 ```sh
-git clone https://github.com/paritytech/frontier.git
+git clone -b pallet-evm-v5.0.0 https://github.com/paritytech/frontier.git
 cd frontier
 cargo build --release  //验证模板能正确编译
 ```
