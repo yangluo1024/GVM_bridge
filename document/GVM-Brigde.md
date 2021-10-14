@@ -33,7 +33,7 @@ std = [
 	"pallet-contracts-rpc-runtime-api/std",
 ]
 ```
-
+当前模板引入项目需要的依赖之后这里将模板本身的路径依赖改为对应github地址及指定分支。避免在后续编译过程中因为部分依赖github地址部分本来导致产生版本冲突问题。具体修改可以参考：[node](https://github.com/luo4lu/frontier_for_gvm/blob/main/template/node/Cargo.toml)与[runtime](https://github.com/luo4lu/frontier_for_gvm/blob/main/template/runtime/Cargo.toml)
 runtime/Cargo.toml
 
 当前目录下执行：
@@ -59,9 +59,9 @@ cargo build --release
 ```sh
 [dependencies]
 #--snip--
-pallet-vm-bridge = {default-features = false, git = 'https://github.com/CycanTech/GVM-Bridge.git', version = '0.1.0'}
-//The generator used to supply randomness to contracts through `seal_random`.
-pallet-evm-precompile-call-vm = {default-features = false, git = 'https://github.com/CycanTech/GVM-Bridge.git', version = '0.1.0'}
+pallet-vm-bridge = {default-features = false, git = 'https://github.com/luo4lu/GVM_bridge.git', version = '0.1.0'}
+#The generator used to supply randomness to contracts through `seal_random`.
+pallet-evm-precompile-call-vm = {default-features = false, git = 'https://github.com/luo4lu/GVM_bridge.git', version = '0.1.0'}
 ```
 
 ####  Crate 特性

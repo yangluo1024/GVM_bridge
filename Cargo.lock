@@ -605,6 +605,19 @@ dependencies = [
 [[package]]
 name = "fp-evm"
 version = "2.0.0"
+source = "git+https://github.com/paritytech/frontier.git?tag=pallet-evm-v5.0.0#61bdbb3a15349988554cef1b85b339c7653bb085"
+dependencies = [
+ "evm",
+ "impl-trait-for-tuples 0.1.3",
+ "parity-scale-codec 2.2.0",
+ "serde",
+ "sp-core",
+ "sp-std 3.0.0 (git+https://github.com/paritytech/substrate.git?branch=frontier)",
+]
+
+[[package]]
+name = "fp-evm"
+version = "2.0.0"
 source = "git+https://github.com/luo4lu/frontier_for_gvm.git#265eb9a4154cf68bf4fa844a9e8263cc61e2644c"
 dependencies = [
  "evm",
@@ -1465,12 +1478,39 @@ dependencies = [
 [[package]]
 name = "pallet-evm"
 version = "5.0.0"
+source = "git+https://github.com/paritytech/frontier.git?tag=pallet-evm-v5.0.0#61bdbb3a15349988554cef1b85b339c7653bb085"
+dependencies = [
+ "evm",
+ "evm-gasometer",
+ "evm-runtime",
+ "fp-evm 2.0.0 (git+https://github.com/paritytech/frontier.git?tag=pallet-evm-v5.0.0)",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "hex",
+ "log",
+ "pallet-balances",
+ "pallet-timestamp",
+ "parity-scale-codec 2.2.0",
+ "primitive-types",
+ "rlp",
+ "serde",
+ "sha3 0.8.2",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std 3.0.0 (git+https://github.com/paritytech/substrate.git?branch=frontier)",
+]
+
+[[package]]
+name = "pallet-evm"
+version = "5.0.0"
 source = "git+https://github.com/luo4lu/frontier_for_gvm.git#265eb9a4154cf68bf4fa844a9e8263cc61e2644c"
 dependencies = [
  "evm",
  "evm-gasometer",
  "evm-runtime",
- "fp-evm",
+ "fp-evm 2.0.0 (git+https://github.com/luo4lu/frontier_for_gvm.git)",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
@@ -1494,12 +1534,12 @@ name = "pallet-evm-precompile-call-vm"
 version = "0.1.0"
 dependencies = [
  "evm",
- "fp-evm",
+ "fp-evm 2.0.0 (git+https://github.com/paritytech/frontier.git?tag=pallet-evm-v5.0.0)",
  "frame-support",
  "frame-system",
  "log",
  "pallet-contracts",
- "pallet-evm",
+ "pallet-evm 5.0.0 (git+https://github.com/paritytech/frontier.git?tag=pallet-evm-v5.0.0)",
  "pallet-vm-bridge",
  "parity-scale-codec 1.3.7",
  "sp-core",
@@ -1514,7 +1554,7 @@ version = "2.0.0-dev"
 source = "git+https://github.com/luo4lu/frontier_for_gvm.git#265eb9a4154cf68bf4fa844a9e8263cc61e2644c"
 dependencies = [
  "evm",
- "fp-evm",
+ "fp-evm 2.0.0 (git+https://github.com/luo4lu/frontier_for_gvm.git)",
  "ripemd160",
  "sp-core",
  "sp-io",
@@ -1559,7 +1599,7 @@ dependencies = [
  "assert_matches",
  "blake2-rfc",
  "byte-slice-cast 1.0.0",
- "fp-evm",
+ "fp-evm 2.0.0 (git+https://github.com/luo4lu/frontier_for_gvm.git)",
  "frame-support",
  "frame-system",
  "getrandom 0.2.3",
@@ -1570,7 +1610,7 @@ dependencies = [
  "log",
  "pallet-balances",
  "pallet-contracts",
- "pallet-evm",
+ "pallet-evm 5.0.0 (git+https://github.com/luo4lu/frontier_for_gvm.git)",
  "pallet-evm-precompile-call-vm",
  "pallet-evm-precompile-simple",
  "pallet-randomness-collective-flip",
